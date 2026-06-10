@@ -19,6 +19,7 @@ import {
 } from './src/quota.js';
 import { requireLogin, requireAdmin } from './src/auth.js';
 import { loadModels, getModel, generateImage } from './src/providers.js';
+import { getServerStatus } from './src/platform.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -224,6 +225,16 @@ app.get('/api/admin/usage', requireLogin, requireAdmin, async (req, res) => {
     estCostUSD: +(total * avg).toFixed(2),
     note: '成本为按各模型均价的粗略估算',
   });
+});
+
+// 服务器侧余额/订阅配额(用 Management Key 查 ZenMux 平台)
+app.get('/api/admin/server-status', requireLogin, requireAdmin, async (req, res) => {
+  try {
+    const status = await getServerStatus({ force: req.query.force === '1' });
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ---------- 静态资源 ----------

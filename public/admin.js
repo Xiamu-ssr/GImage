@@ -8,6 +8,68 @@ async function api(url, opts = {}) {
   return r;
 }
 
+async function loadServerStatus(force) {
+  $('serverBody').innerHTML = '<span class="muted">加载中…</span>';
+  let s;
+  try {
+    s = await (await api('/api/admin/server-status' + (force ? '?force=1' : ''))).json();
+  } catch (e) {
+    $('serverBody').innerHTML = `<span class="error">加载失败:${e.message}</span>`;
+    return;
+  }
+  if (!s.configured) {
+    $('serverBody').innerHTML = '<span class="muted">未配置 ZENMUX_MANAGEMENT_KEY,无法显示服务器余额。在 .env 中填入 sk-mg-v1-... 的管理密钥即可。</span>';
+    return;
+  }
+
+  const cards = [];
+
+  // 订阅配额(最关键:反映"还能不能生图")
+  const sub = s.subscription;
+  if (sub) {
+    const status = sub.account_status === 'healthy'
+      ? '<span class="pill ok">健康</span>' : `<span class="pill bad">${sub.account_status || '异常'}</span>`;
+    cards.push(`<div class="stat">
+      <div class="t">订阅档位 ${status}</div>
+      <div class="v">${(sub.plan?.tier || '-').toUpperCase()}</div>
+      <div class="sub">$${sub.plan?.amount_usd}/${sub.plan?.interval} · 到期 ${fmtDate(sub.plan?.expires_at)}</div>
+    </div>`);
+    if (sub.quota_5_hour) cards.push(quotaCard('5 小时配额', sub.quota_5_hour));
+    if (sub.quota_7_day) cards.push(quotaCard('7 天配额', sub.quota_7_day));
+  } else if (s.subscriptionError) {
+    cards.push(`<div class="stat"><div class="t">订阅</div><div class="sub error">${s.subscriptionError}</div></div>`);
+  }
+
+  // PAYG 余额
+  if (s.payg) {
+    cards.push(`<div class="stat">
+      <div class="t">按量付费余额 (PAYG)</div>
+      <div class="v">$${fmt(s.payg.total_credits)}</div>
+      <div class="sub">充值 $${fmt(s.payg.top_up_credits)} · 赠送 $${fmt(s.payg.bonus_credits)}</div>
+    </div>`);
+  } else if (s.paygError) {
+    cards.push(`<div class="stat"><div class="t">PAYG 余额</div><div class="sub error">${s.paygError}</div></div>`);
+  }
+
+  $('serverBody').innerHTML = `<div class="stat-grid">${cards.join('')}</div>
+    <div class="muted" style="margin-top:10px">数据更新于 ${fmtTime(s.fetchedAt)}${s.cached ? '(缓存)' : ''}</div>`;
+}
+
+function quotaCard(title, q) {
+  const pct = Math.round((q.usage_percentage || 0) * 100);
+  const cls = pct >= 90 ? 'crit' : pct >= 70 ? 'warn' : '';
+  return `<div class="stat">
+    <div class="t">${title} · 已用 ${pct}%</div>
+    <div class="v">剩 ${fmt(q.remaining_flows)} <span style="font-size:13px;color:var(--muted)">flows</span></div>
+    <div class="sub">≈ 剩 $${fmt(q.max_value_usd - q.used_value_usd)} / $${fmt(q.max_value_usd)} · 重置 ${fmtTime(q.resets_at)}</div>
+    <div class="bar"><i class="${cls}" style="width:${pct}%"></i></div>
+  </div>`;
+}
+
+function fmt(n) { return n == null ? '-' : (+n).toFixed(2); }
+function fmtDate(s) { return s ? new Date(s).toLocaleDateString('zh-CN') : '-'; }
+function fmtTime(s) { return s ? new Date(s).toLocaleString('zh-CN', { hour12: false }) : '-'; }
+
 async function loadUsage() {
   const u = await (await api('/api/admin/usage')).json();
   $('usageDate').textContent = u.date;
@@ -81,7 +143,10 @@ $('logoutBtn').onclick = async () => {
   location.href = '/';
 };
 
+$('refreshServer').onclick = () => loadServerStatus(true);
+
 (async () => {
+  await loadServerStatus(false);
   await loadUsage();
   await loadAccounts();
 })().catch((e) => console.error(e));

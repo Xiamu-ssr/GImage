@@ -16,6 +16,15 @@
   </div>
 
   <div style="padding:20px; display:flex; flex-direction:column; gap:20px; max-width:1000px; margin:0 auto">
+    <!-- 服务器状态(订阅配额 + PAYG 余额) -->
+    <div class="card" id="serverCard">
+      <div class="row" style="justify-content:space-between">
+        <h3 style="margin:0">服务器状态(ZenMux 账户)</h3>
+        <button class="ghost" id="refreshServer" style="padding:5px 12px">刷新</button>
+      </div>
+      <div id="serverBody" class="muted" style="margin-top:12px">加载中…</div>
+    </div>
+
     <!-- 用量概览 -->
     <div class="card">
       <h3 style="margin-top:0">今日用量(<span id="usageDate"></span>)</h3>

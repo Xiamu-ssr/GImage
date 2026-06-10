@@ -9,27 +9,28 @@
 - 🖼️ 支持「以图改图 / 多轮编辑」(上传参考图,或以上一张结果继续修改)
 - 📊 每账户每日配额(默认 10,管理后台可逐个自定义),按天自动重置
 - 👤 管理后台:增删账户、改密码、改配额、查看今日用量与成本估算
+- 💰 服务器状态面板:显示 ZenMux 订阅档位、Flow 配额(5小时/7天)剩余、PAYG 余额——一眼看出「是不是订阅没额度了」
 - 💾 纯本地存储:`data/` 目录下 JSON + PNG,迁移/备份只需拷贝该目录
 
-## 快速开始
+## 快速开始(推荐:一键脚本)
 
 ```bash
-# 1. 安装依赖
-npm install
-
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env:
-#   ZENMUX_API_KEY  ← 必填,从 zenmux 控制台创建
-#   SESSION_SECRET  ← 改成一串随机长字符串
-#   ADMIN_USER / ADMIN_PASS ← 首次启动自动创建的管理员账号
-#   PORT            ← 监听端口(默认 3000)
-
-# 3. 启动
-npm start
+bash setup.sh
 ```
 
-打开 `http://localhost:3000`,用 `.env` 里的管理员账号登录。
+脚本会引导你:粘贴两个 ZenMux 密钥 → 自动生成管理员账号和随机强密码 → 写好 `.env` → 装依赖 → 结尾**显示一次管理员账密**(请保存),并可直接启动。
+
+> 需要两个密钥(都在 [ZenMux 控制台](https://zenmux.ai) 获取):
+> - **生图密钥**(`sk-ai-v1-...` 或 `sk-ss-v1-...`):调用模型生图,必填。
+> - **管理密钥**(`sk-mg-v1-...`):只读,用于在管理页显示服务器余额/配额,可留空跳过。
+
+## 手动配置(可选)
+
+```bash
+npm install
+cp .env.example .env   # 编辑填入两个 key、管理员账号、端口
+npm start
+```
 
 ## 使用流程
 
@@ -53,11 +54,13 @@ npm start
 
 ```
 server.js          入口:Express + session + 路由
+setup.sh           一键安装向导
 src/
   store.js         JSON 读写(串行写队列,防并发损坏)
   accounts.js      账户 CRUD + bcrypt
   quota.js         按天配额检查/扣减
   providers.js     生图适配层(gemini / openai-images 两种协议)
+  platform.js      ZenMux 平台 API(查服务器余额/订阅配额,60s 缓存)
   auth.js          登录/管理员中间件
 config/models.json 可选模型清单
 public/            前端(login / app / admin)
