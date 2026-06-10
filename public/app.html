@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GImage · 工作台</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">GImage</div>
+    <div class="right">
+      <span class="badge">今日剩余 <b id="remaining">-</b> / <span id="quota">-</span></span>
+      <span id="who"></span>
+      <a id="adminLink" href="/admin.html" style="display:none">管理</a>
+      <button class="ghost" id="logoutBtn">退出</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <!-- 左:控制面板 -->
+    <div class="card">
+      <label>模型</label>
+      <select id="model"></select>
+      <div class="muted" id="modelNote" style="margin-top:6px"></div>
+
+      <label>提示词</label>
+      <textarea id="prompt" rows="5" placeholder="描述你想要的画面,或描述如何修改下方参考图…"></textarea>
+
+      <label>参考图(以图改图 / 多轮编辑,可选)</label>
+      <input type="file" id="refFile" accept="image/*" multiple />
+      <div class="thumb-strip" id="refStrip"></div>
+
+      <div style="margin-top:18px" class="row">
+        <button id="genBtn" style="flex:1">生成</button>
+        <button class="ghost" id="clearRefBtn">清空参考图</button>
+      </div>
+      <div class="error" id="err"></div>
+    </div>
+
+    <!-- 右:结果 + 历史 -->
+    <div class="card">
+      <div class="result-box" id="resultBox">
+        <span class="muted">生成的图片会显示在这里</span>
+      </div>
+      <div class="row" style="margin-top:12px; justify-content:flex-end">
+        <button class="ghost" id="useAsRefBtn" disabled>以这张继续修改</button>
+        <a class="btn ghost" id="downloadBtn" style="display:none" download>下载</a>
+      </div>
+
+      <h3 style="margin:24px 0 0">我的历史</h3>
+      <div class="history-grid" id="history"></div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GImage · 登录</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="card login-box">
+      <h1>GImage</h1>
+      <p class="muted">网页生图站 · 请登录</p>
+      <label>用户名</label>
+      <input id="username" autocomplete="username" />
+      <label>密码</label>
+      <input id="password" type="password" autocomplete="current-password" />
+      <div style="margin-top:18px">
+        <button id="loginBtn" style="width:100%">登录</button>
+      </div>
+      <div class="error" id="err"></div>
+    </div>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    async function login() {
+      $('err').textContent = '';
+      const username = $('username').value.trim();
+      const password = $('password').value;
+      if (!username || !password) { $('err').textContent = '请输入用户名和密码'; return; }
+      $('loginBtn').disabled = true;
+      try {
+        const r = await fetch('/api/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await r.json();
+        if (!r.ok) { $('err').textContent = data.error || '登录失败'; return; }
+        location.href = '/app.html';
+      } catch (e) {
+        $('err').textContent = '网络错误';
+      } finally {
+        $('loginBtn').disabled = false;
+      }
+    }
+    $('loginBtn').addEventListener('click', login);
+    $('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+  </script>
+</body>
+</html>
