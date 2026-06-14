@@ -15,7 +15,7 @@ import {
   listAccounts, createAccount, updateAccount, deleteAccount,
 } from './src/accounts.js';
 import {
-  todayStr, getUsedToday, getRemaining, consume, getUsageByDate,
+  todayStr, getSpentToday, getRemaining, canAfford, consume, getUsageByDate,
 } from './src/quota.js';
 import { requireLogin, requireAdmin } from './src/auth.js';
 import { loadModels, getModel, generateImage } from './src/providers.js';
@@ -61,12 +61,13 @@ app.get('/api/me', requireLogin, async (req, res) => {
   if (!acc) {
     return req.session.destroy(() => res.status(401).json({ error: '账户已不存在' }));
   }
-  const remaining = await getRemaining(acc.username, acc.dailyQuota);
+  const remaining = await getRemaining(acc.username, acc.dailyBudget);
+  const spent = await getSpentToday(acc.username);
   res.json({
     user: { username: acc.username, role: acc.role },
-    dailyQuota: acc.dailyQuota,
-    used: acc.dailyQuota - remaining,
-    remaining,
+    dailyBudget: acc.dailyBudget,
+    spent: +spent.toFixed(2),
+    remaining: +remaining.toFixed(2),
   });
 });
 
@@ -90,13 +91,15 @@ app.post('/api/generate', requireLogin, upload.array('refImages', 4), async (req
     const modelDef = await getModel(model);
     if (!modelDef) return res.status(400).json({ error: '无效模型' });
 
+    const cost = modelDef.costPerImage || 0.05;
+
     // 解析模型参数
     let params = {};
     try { params = JSON.parse(req.body.params || '{}'); } catch { /* ignore */ }
 
-    const remaining = await getRemaining(username, acc.dailyQuota);
-    if (remaining <= 0) {
-      return res.status(429).json({ error: '今日生图次数已用完,请明天再试' });
+    // 额度检查(美元)
+    if (!(await canAfford(username, acc.dailyBudget, cost))) {
+      return res.status(429).json({ error: `今日额度已用完(每日 $${acc.dailyBudget}),请明天再试` });
     }
 
     // 收集参考图
@@ -130,19 +133,21 @@ app.post('/api/generate', requireLogin, upload.array('refImages', 4), async (req
 
     // 元数据:完整的会话记录
     const meta = {
-      id, sessionId, username, model, prompt, params,
-      inputRefs, // 输入图文件名列表
+      id, sessionId, username, model, prompt, params, cost,
+      inputRefs,
       prevImageId: prevImageId || null,
       createdAt: new Date().toISOString(),
     };
     await fs.writeFile(path.join(userDir, `${id}.json`), JSON.stringify(meta, null, 2));
 
-    const used = await consume(username);
+    const spent = await consume(username, model, cost);
+    const remaining = await getRemaining(username, acc.dailyBudget);
     res.json({
-      ok: true, id, sessionId,
+      ok: true, id, sessionId, cost,
       imageUrl: `/api/image/${id}`,
       mimeType,
-      remaining: Math.max(0, acc.dailyQuota - used),
+      spent: +spent.toFixed(2),
+      remaining: +remaining.toFixed(2),
     });
   } catch (err) {
     res.status(500).json({ error: err.message || '生图失败' });
@@ -199,13 +204,15 @@ app.get('/api/gallery', requireLogin, async (req, res) => {
   })));
 });
 
-// 用户历史(简版,供工作台侧边栏,兼容旧接口)
+// 用户历史(供工作台侧边栏,含 inputUrls)
 app.get('/api/history', requireLogin, async (req, res) => {
   const username = req.session.user.username;
   const metas = await loadUserMetas(username);
   res.json(metas.slice(0, 50).map((m) => ({
     ...m,
     imageUrl: `/api/image/${m.id}`,
+    downloadUrl: `/api/image/${m.id}/download`,
+    inputUrls: (m.inputRefs || []).map((r) => `/api/image/${r.replace('.png', '')}`),
   })));
 });
 
@@ -215,7 +222,7 @@ app.get('/api/admin/accounts', requireLogin, requireAdmin, async (req, res) => {
   const date = todayStr();
   const withUsage = await Promise.all(accounts.map(async (a) => ({
     ...publicView(a),
-    usedToday: await getUsedToday(a.username, date),
+    spentToday: +(await getSpentToday(a.username, date)).toFixed(2),
   })));
   res.json(withUsage);
 });

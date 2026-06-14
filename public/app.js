@@ -15,8 +15,8 @@ async function api(url, opts = {}) {
 async function init() {
   const me = await (await api('/api/me')).json();
   $('who').textContent = me.user.username;
-  $('remaining').textContent = me.remaining;
-  $('quota').textContent = me.dailyQuota;
+  $('remaining').textContent = `$${me.remaining}`;
+  $('quota').textContent = `$${me.dailyBudget}`;
   if (me.user.role === 'admin') $('adminLink').style.display = '';
 
   models = await (await api('/api/models')).json();
@@ -84,10 +84,11 @@ function addUserMsg(prompt, refUrls) {
   addMsg('user', content);
 }
 
-function addAiImage(imageUrl, imageId, model, params) {
+function addAiImage(imageUrl, imageId, model, params, cost) {
   const paramStr = Object.entries(params || {}).map(([k, v]) => `${k}:${v}`).join(' ');
+  const costStr = cost ? ` · $${cost}` : '';
   const content = `<img src="${imageUrl}" onclick="openLightbox('${imageUrl}')" />
-    <div class="meta">${model?.split('/').pop() || ''}${paramStr ? ' · ' + paramStr : ''}</div>
+    <div class="meta">${model?.split('/').pop() || ''}${paramStr ? ' · ' + paramStr : ''}${costStr}</div>
     <div class="img-actions">
       <button class="ghost sm" onclick="useAsRef('${imageId}','${imageUrl}')">继续修改</button>
       <a href="/api/image/${imageId}/download" class="btn ghost sm" download>下载</a>
@@ -142,8 +143,8 @@ async function generate() {
     }
     lastImageId = data.id;
     currentSessionId = data.sessionId;
-    $('remaining').textContent = data.remaining;
-    addAiImage(data.imageUrl, data.id, $('model').value, collectParams());
+    $('remaining').textContent = `$${data.remaining}`;
+    addAiImage(data.imageUrl, data.id, $('model').value, collectParams(), data.cost);
     await loadSessions();
   } catch (e) {
     typing.remove();
@@ -194,8 +195,9 @@ async function loadSession(sid) {
   $('chatBody').innerHTML = '';
   const items = history.filter((h) => (h.sessionId || h.id) === sid).reverse();
   for (const h of items) {
-    addUserMsg(h.prompt, (h.inputUrls || []).slice(0, 2));
-    addAiImage(h.imageUrl, h.id, h.model, h.params);
+    const inputImgUrls = (h.inputUrls || []).slice(0, 4);
+    addUserMsg(h.prompt, inputImgUrls);
+    addAiImage(h.imageUrl, h.id, h.model, h.params, h.cost);
   }
   if (items.length) lastImageId = items[items.length - 1].id;
   document.querySelectorAll('.s-item').forEach((el) => el.classList.toggle('active', el.dataset.sid === sid));

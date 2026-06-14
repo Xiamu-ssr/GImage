@@ -36,7 +36,7 @@ async function init() {
         <img src="${item.imageUrl}" onclick="openLightbox('${item.imageUrl}')" />
         <div class="meta">
           <div class="prompt">${esc(item.prompt)}</div>
-          <div class="info">${item.model?.split('/').pop() || ''} · ${fmtTime(item.createdAt)}${item.params ? ' · ' + paramStr(item.params) : ''}</div>
+          <div class="info">${item.model?.split('/').pop() || ''} · ${fmtTime(item.createdAt)}${item.cost ? ' · $' + item.cost : ''}${item.params ? ' · ' + paramStr(item.params) : ''}</div>
         </div>
         <div class="actions">
           <a href="${item.downloadUrl}" class="btn ghost" style="font-size:12px;padding:5px 10px" download>下载原图</a>

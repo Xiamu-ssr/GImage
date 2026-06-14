@@ -69,10 +69,10 @@ async function loadAccounts() {
     <tr data-user="${a.username}">
       <td>${a.username}</td>
       <td>${a.role === 'admin' ? '管理员' : '普通'}</td>
-      <td><input type="number" value="${a.dailyQuota}" min="0" style="width:80px" class="q"/></td>
-      <td>${a.usedToday}</td>
+      <td><input type="number" value="${a.dailyBudget || 1.5}" min="0" step="0.1" style="width:90px" class="q"/></td>
+      <td>$${a.spentToday || 0}</td>
       <td class="row" style="gap:6px">
-        <button class="ghost saveQuota">保存配额</button>
+        <button class="ghost saveQuota">保存额度</button>
         <button class="ghost resetPass">改密码</button>
         <button class="danger del">删除</button>
       </td>
@@ -80,7 +80,7 @@ async function loadAccounts() {
   $('accBody').querySelectorAll('tr').forEach((tr) => {
     const user = tr.dataset.user;
     tr.querySelector('.saveQuota').onclick = async () => {
-      const r = await api(`/api/admin/accounts/${enc(user)}`, { method: 'PATCH', headers: ct, body: JSON.stringify({ dailyQuota: tr.querySelector('.q').value }) });
+      const r = await api(`/api/admin/accounts/${enc(user)}`, { method: 'PATCH', headers: ct, body: JSON.stringify({ dailyBudget: tr.querySelector('.q').value }) });
       alert(r.ok ? '已保存' : (await r.json()).error);
     };
     tr.querySelector('.resetPass').onclick = async () => {
@@ -98,11 +98,11 @@ async function loadAccounts() {
 }
 $('createBtn').onclick = async () => {
   $('createErr').textContent = '';
-  const body = { username: $('newUser').value.trim(), password: $('newPass').value, dailyQuota: $('newQuota').value, role: $('newRole').value };
+  const body = { username: $('newUser').value.trim(), password: $('newPass').value, dailyBudget: $('newBudget').value, role: $('newRole').value };
   const r = await api('/api/admin/accounts', { method: 'POST', headers: ct, body: JSON.stringify(body) });
   const data = await r.json();
   if (!r.ok) { $('createErr').textContent = data.error || '创建失败'; return; }
-  $('newUser').value = ''; $('newPass').value = ''; $('newQuota').value = '10';
+  $('newUser').value = ''; $('newPass').value = ''; $('newBudget').value = '1.5';
   loadAccounts();
 };
 

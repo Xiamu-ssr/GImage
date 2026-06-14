@@ -1,10 +1,11 @@
 // 账户管理:CRUD + bcrypt 密码校验。账户存于 data/accounts.json。
+// dailyBudget 单位为美元,默认 $1.50/天/人。
 import path from 'path';
 import bcrypt from 'bcryptjs';
 import { DATA_DIR, readJSON, updateJSON } from './store.js';
 
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
-const DEFAULT_QUOTA = 10;
+const DEFAULT_BUDGET = 1.5; // $1.50/天
 
 export async function listAccounts() {
   return readJSON(ACCOUNTS_FILE, []);
@@ -15,14 +16,12 @@ export async function findAccount(username) {
   return accounts.find((a) => a.username === username) || null;
 }
 
-/** 不含 passwordHash 的安全视图,用于返回给前端。 */
 export function publicView(acc) {
   if (!acc) return null;
   const { passwordHash, ...rest } = acc;
   return rest;
 }
 
-/** 首次启动:若无任何账户,用环境变量创建管理员。 */
 export async function ensureAdmin(adminUser, adminPass) {
   const accounts = await listAccounts();
   if (accounts.length > 0) return;
@@ -30,7 +29,7 @@ export async function ensureAdmin(adminUser, adminPass) {
     console.warn('[accounts] 无账户且未配置 ADMIN_USER/ADMIN_PASS,跳过管理员创建');
     return;
   }
-  await createAccount({ username: adminUser, password: adminPass, role: 'admin', dailyQuota: DEFAULT_QUOTA });
+  await createAccount({ username: adminUser, password: adminPass, role: 'admin', dailyBudget: DEFAULT_BUDGET });
   console.log(`[accounts] 已创建管理员账号: ${adminUser}`);
 }
 
@@ -41,20 +40,19 @@ export async function verifyPassword(username, password) {
   return ok ? acc : null;
 }
 
-export async function createAccount({ username, password, role = 'user', dailyQuota = DEFAULT_QUOTA }) {
+export async function createAccount({ username, password, role = 'user', dailyBudget = DEFAULT_BUDGET }) {
   username = String(username || '').trim();
   if (!username) throw new Error('用户名不能为空');
   if (!password || String(password).length < 4) throw new Error('密码至少 4 位');
   const passwordHash = await bcrypt.hash(String(password), 10);
-  const quota = Number.isFinite(+dailyQuota) ? Math.max(0, Math.floor(+dailyQuota)) : DEFAULT_QUOTA;
+  const budget = Number.isFinite(+dailyBudget) ? Math.max(0, +Number(+dailyBudget).toFixed(2)) : DEFAULT_BUDGET;
 
   await updateJSON(ACCOUNTS_FILE, [], (accounts) => {
     if (accounts.some((a) => a.username === username)) throw new Error('用户名已存在');
     accounts.push({
-      username,
-      passwordHash,
+      username, passwordHash,
       role: role === 'admin' ? 'admin' : 'user',
-      dailyQuota: quota,
+      dailyBudget: budget,
       createdAt: new Date().toISOString(),
     });
     return accounts;
@@ -62,8 +60,7 @@ export async function createAccount({ username, password, role = 'user', dailyQu
   return publicView(await findAccount(username));
 }
 
-/** 更新账户:支持改密码、配额、角色。 */
-export async function updateAccount(username, { password, dailyQuota, role }) {
+export async function updateAccount(username, { password, dailyBudget, role }) {
   let passwordHash;
   if (password) {
     if (String(password).length < 4) throw new Error('密码至少 4 位');
@@ -73,8 +70,8 @@ export async function updateAccount(username, { password, dailyQuota, role }) {
     const acc = accounts.find((a) => a.username === username);
     if (!acc) throw new Error('账户不存在');
     if (passwordHash) acc.passwordHash = passwordHash;
-    if (dailyQuota !== undefined && dailyQuota !== null && dailyQuota !== '') {
-      acc.dailyQuota = Math.max(0, Math.floor(+dailyQuota));
+    if (dailyBudget !== undefined && dailyBudget !== null && dailyBudget !== '') {
+      acc.dailyBudget = Math.max(0, +Number(+dailyBudget).toFixed(2));
     }
     if (role && (role === 'admin' || role === 'user')) acc.role = role;
     return accounts;

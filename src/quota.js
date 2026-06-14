@@ -1,8 +1,8 @@
-// 按天配额:用量按日期分文件存储(usage/YYYY-MM-DD.json),新一天自然计数归零。
+// 按天额度:从"次数"改为"美元额度"。
+// 每次生图按模型的 costPerImage 扣费。额度按日期分文件,新一天自动重置。
 import path from 'path';
 import { USAGE_DIR, readJSON, updateJSON } from './store.js';
 
-/** 本地时区的今日日期串 YYYY-MM-DD。 */
 export function todayStr(d = new Date()) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -14,32 +14,46 @@ function usageFile(date) {
   return path.join(USAGE_DIR, `${date}.json`);
 }
 
-/** 读取某用户今日已用次数。 */
-export async function getUsedToday(username, date = todayStr()) {
+/**
+ * 每个用户的用量格式:
+ * { "alice": { spent: 0.26, count: 2, history: [{model,cost,at}] } }
+ */
+
+export async function getSpentToday(username, date = todayStr()) {
+  const usage = await readJSON(usageFile(date), {});
+  return usage[username]?.spent || 0;
+}
+
+export async function getCountToday(username, date = todayStr()) {
   const usage = await readJSON(usageFile(date), {});
   return usage[username]?.count || 0;
 }
 
-/** 剩余次数 = 配额 - 今日已用(下限 0)。 */
-export async function getRemaining(username, dailyQuota, date = todayStr()) {
-  const used = await getUsedToday(username, date);
-  return Math.max(0, dailyQuota - used);
+/** 剩余额度(美元)。dailyBudget 是美元额度上限。 */
+export async function getRemaining(username, dailyBudget, date = todayStr()) {
+  const spent = await getSpentToday(username, date);
+  return Math.max(0, +(dailyBudget - spent).toFixed(4));
 }
 
-/**
- * 在生图成功后扣减一次配额(串行更新保证不超额)。
- * 返回扣减后的 count。
- */
-export async function consume(username, date = todayStr()) {
+/** 检查是否有足够额度(生图前调用)。 */
+export async function canAfford(username, dailyBudget, cost, date = todayStr()) {
+  const remaining = await getRemaining(username, dailyBudget, date);
+  return remaining >= cost;
+}
+
+/** 生图成功后扣费。返回扣费后的 spent。 */
+export async function consume(username, model, cost, date = todayStr()) {
   const updated = await updateJSON(usageFile(date), {}, (usage) => {
-    const cur = usage[username]?.count || 0;
-    usage[username] = { count: cur + 1, lastAt: new Date().toISOString() };
+    const cur = usage[username] || { spent: 0, count: 0, history: [] };
+    cur.spent = +(cur.spent + cost).toFixed(4);
+    cur.count += 1;
+    cur.history.push({ model, cost, at: new Date().toISOString() });
+    usage[username] = cur;
     return usage;
   });
-  return updated[username].count;
+  return updated[username].spent;
 }
 
-/** 管理端:返回某日各用户用量映射。 */
 export async function getUsageByDate(date = todayStr()) {
   return readJSON(usageFile(date), {});
 }
