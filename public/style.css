@@ -89,3 +89,8 @@ th { color: var(--muted); font-weight: 600; }
 .pill { display: inline-block; font-size: 12px; padding: 2px 10px; border-radius: 20px; }
 .pill.ok { background: rgba(76,208,125,.15); color: var(--ok); }
 .pill.bad { background: rgba(255,92,92,.15); color: var(--danger); }
+
+/* lightbox(通用) */
+.lightbox { position: fixed; inset: 0; z-index: 999; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.lightbox img { max-width: 95vw; max-height: 92vh; border-radius: 4px; }
+.lightbox .close { position: absolute; top: 16px; right: 24px; font-size: 28px; color: #fff; cursor: pointer; }

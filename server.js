@@ -70,33 +70,36 @@ app.get('/api/me', requireLogin, async (req, res) => {
   });
 });
 
-// ---------- 模型列表 ----------
+// ---------- 模型列表(含参数定义) ----------
 app.get('/api/models', requireLogin, async (req, res) => {
   const models = await loadModels();
-  // 不暴露内部成本细节给普通用户(管理员另有用量页),但显示名/能力可见
   res.json(models.map((m) => ({
     id: m.id, label: m.label, supportsEdit: m.supportsEdit, note: m.note,
+    params: m.params || {},
   })));
 });
 
-// ---------- 生图 ----------
+// ---------- 生图(含会话记录与输入图保存) ----------
 app.post('/api/generate', requireLogin, upload.array('refImages', 4), async (req, res) => {
   const username = req.session.user.username;
   try {
     const acc = await findAccount(username);
     if (!acc) return res.status(401).json({ error: '账户已不存在' });
 
-    const { model, prompt, prevImageId } = req.body || {};
+    const { model, prompt, prevImageId, sessionId: reqSessionId } = req.body || {};
     const modelDef = await getModel(model);
     if (!modelDef) return res.status(400).json({ error: '无效模型' });
 
-    // 配额检查(扣减在成功之后)
+    // 解析模型参数
+    let params = {};
+    try { params = JSON.parse(req.body.params || '{}'); } catch { /* ignore */ }
+
     const remaining = await getRemaining(username, acc.dailyQuota);
     if (remaining <= 0) {
       return res.status(429).json({ error: '今日生图次数已用完,请明天再试' });
     }
 
-    // 收集参考图:上传的文件 + 引用的历史图
+    // 收集参考图
     const inputImages = [];
     for (const f of req.files || []) {
       inputImages.push({ mimeType: f.mimetype || 'image/png', base64: f.buffer.toString('base64') });
@@ -106,23 +109,37 @@ app.post('/api/generate', requireLogin, upload.array('refImages', 4), async (req
       if (prev) inputImages.push({ mimeType: 'image/png', base64: prev.toString('base64') });
     }
 
-    const { buffer, mimeType } = await generateImage({ model, prompt, inputImages });
+    const { buffer, mimeType } = await generateImage({ model, prompt, inputImages, params });
 
-    // 落盘
+    // 落盘:输出图 + 输入图 + 完整会话记录
     const id = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    const sessionId = reqSessionId || id; // 没有 sessionId 就用当前 id 开新会话
     const userDir = path.join(IMAGES_DIR, sanitize(username));
     await fs.mkdir(userDir, { recursive: true });
-    await fs.writeFile(path.join(userDir, `${id}.png`), buffer);
-    await fs.writeFile(path.join(userDir, `${id}.json`), JSON.stringify({
-      id, model, prompt, createdAt: new Date().toISOString(),
-      hadInput: inputImages.length > 0,
-    }, null, 2));
 
-    // 成功后扣减配额
+    // 保存输出图
+    await fs.writeFile(path.join(userDir, `${id}.png`), buffer);
+
+    // 保存输入图(每张独立文件,方便管理端查看)
+    const inputRefs = [];
+    for (let i = 0; i < inputImages.length; i++) {
+      const refName = `${id}_input${i}.png`;
+      await fs.writeFile(path.join(userDir, refName), Buffer.from(inputImages[i].base64, 'base64'));
+      inputRefs.push(refName);
+    }
+
+    // 元数据:完整的会话记录
+    const meta = {
+      id, sessionId, username, model, prompt, params,
+      inputRefs, // 输入图文件名列表
+      prevImageId: prevImageId || null,
+      createdAt: new Date().toISOString(),
+    };
+    await fs.writeFile(path.join(userDir, `${id}.json`), JSON.stringify(meta, null, 2));
+
     const used = await consume(username);
     res.json({
-      ok: true,
-      id,
+      ok: true, id, sessionId,
       imageUrl: `/api/image/${id}`,
       mimeType,
       remaining: Math.max(0, acc.dailyQuota - used),
@@ -132,31 +149,10 @@ app.post('/api/generate', requireLogin, upload.array('refImages', 4), async (req
   }
 });
 
-// ---------- 历史 ----------
-app.get('/api/history', requireLogin, async (req, res) => {
-  const username = req.session.user.username;
-  const userDir = path.join(IMAGES_DIR, sanitize(username));
-  try {
-    const files = await fs.readdir(userDir);
-    const metas = [];
-    for (const f of files) {
-      if (!f.endsWith('.json')) continue;
-      const meta = JSON.parse(await fs.readFile(path.join(userDir, f), 'utf8'));
-      metas.push({ ...meta, imageUrl: `/api/image/${meta.id}` });
-    }
-    metas.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-    res.json(metas);
-  } catch (err) {
-    if (err.code === 'ENOENT') return res.json([]);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 回传图片(仅本人或管理员)
+// ---------- 图片服务 ----------
 app.get('/api/image/:id', requireLogin, async (req, res) => {
   const id = sanitize(req.params.id);
   const requester = req.session.user;
-  // 先在本人目录找;管理员可跨用户找
   const owners = requester.role === 'admin'
     ? await fs.readdir(IMAGES_DIR).catch(() => [])
     : [sanitize(requester.username)];
@@ -165,10 +161,52 @@ app.get('/api/image/:id', requireLogin, async (req, res) => {
     try {
       const buf = await fs.readFile(fp);
       res.set('Content-Type', 'image/png');
+      res.set('Content-Disposition', `inline; filename="${id}.png"`);
       return res.send(buf);
-    } catch { /* 继续找 */ }
+    } catch { /* next */ }
   }
   res.status(404).json({ error: '图片不存在' });
+});
+
+// 原图下载(带 download 头)
+app.get('/api/image/:id/download', requireLogin, async (req, res) => {
+  const id = sanitize(req.params.id);
+  const requester = req.session.user;
+  const owners = requester.role === 'admin'
+    ? await fs.readdir(IMAGES_DIR).catch(() => [])
+    : [sanitize(requester.username)];
+  for (const owner of owners) {
+    const fp = path.join(IMAGES_DIR, owner, `${id}.png`);
+    try {
+      const buf = await fs.readFile(fp);
+      res.set('Content-Type', 'image/png');
+      res.set('Content-Disposition', `attachment; filename="${id}.png"`);
+      return res.send(buf);
+    } catch { /* next */ }
+  }
+  res.status(404).json({ error: '图片不存在' });
+});
+
+// ---------- 用户图集(gallery) ----------
+app.get('/api/gallery', requireLogin, async (req, res) => {
+  const username = req.session.user.username;
+  const metas = await loadUserMetas(username);
+  res.json(metas.map((m) => ({
+    ...m,
+    imageUrl: `/api/image/${m.id}`,
+    downloadUrl: `/api/image/${m.id}/download`,
+    inputUrls: (m.inputRefs || []).map((r) => `/api/image/${r.replace('.png', '')}`),
+  })));
+});
+
+// 用户历史(简版,供工作台侧边栏,兼容旧接口)
+app.get('/api/history', requireLogin, async (req, res) => {
+  const username = req.session.user.username;
+  const metas = await loadUserMetas(username);
+  res.json(metas.slice(0, 50).map((m) => ({
+    ...m,
+    imageUrl: `/api/image/${m.id}`,
+  })));
 });
 
 // ---------- 管理端 ----------
@@ -209,25 +247,16 @@ app.delete('/api/admin/accounts/:username', requireLogin, requireAdmin, async (r
   }
 });
 
-// 用量统计(含成本估算)
 app.get('/api/admin/usage', requireLogin, requireAdmin, async (req, res) => {
   const date = req.query.date || todayStr();
   const usage = await getUsageByDate(date);
   const models = await loadModels();
-  // 简单成本估算:无法精确归因到模型,按总张数 * 平均价区间给个范围
   const prices = models.map((m) => m.costPerImageUSD).filter((x) => Number.isFinite(x));
   const avg = prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
   const total = Object.values(usage).reduce((s, u) => s + (u.count || 0), 0);
-  res.json({
-    date,
-    usage,
-    totalImages: total,
-    estCostUSD: +(total * avg).toFixed(2),
-    note: '成本为按各模型均价的粗略估算',
-  });
+  res.json({ date, usage, totalImages: total, estCostUSD: +(total * avg).toFixed(2), note: '成本为按各模型均价的粗略估算' });
 });
 
-// 服务器侧余额/订阅配额(用 Management Key 查 ZenMux 平台)
 app.get('/api/admin/server-status', requireLogin, requireAdmin, async (req, res) => {
   try {
     const status = await getServerStatus({ force: req.query.force === '1' });
@@ -237,17 +266,72 @@ app.get('/api/admin/server-status', requireLogin, requireAdmin, async (req, res)
   }
 });
 
+// 管理端:查看所有用户列表(for gallery dropdown)
+app.get('/api/admin/users', requireLogin, requireAdmin, async (req, res) => {
+  const accounts = await listAccounts();
+  res.json(accounts.map((a) => a.username));
+});
+
+// 管理端:查看指定用户的所有记录(含输入图+会话)
+app.get('/api/admin/records/:username', requireLogin, requireAdmin, async (req, res) => {
+  const metas = await loadUserMetas(req.params.username);
+  res.json(metas.map((m) => ({
+    ...m,
+    imageUrl: `/api/image/${m.id}`,
+    downloadUrl: `/api/image/${m.id}/download`,
+    inputUrls: (m.inputRefs || []).map((r) => `/api/image/${r.replace('.png', '')}`),
+  })));
+});
+
+// 管理端:查看全部输出(跨用户汇总,分页)
+app.get('/api/admin/all-records', requireLogin, requireAdmin, async (req, res) => {
+  const limit = Math.min(+req.query.limit || 100, 500);
+  const offset = +req.query.offset || 0;
+  let dirs;
+  try { dirs = await fs.readdir(IMAGES_DIR); } catch { return res.json([]); }
+  let all = [];
+  for (const d of dirs) {
+    const metas = await loadUserMetas(d);
+    all.push(...metas.map((m) => ({
+      ...m,
+      imageUrl: `/api/image/${m.id}`,
+      downloadUrl: `/api/image/${m.id}/download`,
+      inputUrls: (m.inputRefs || []).map((r) => `/api/image/${r.replace('.png', '')}`),
+    })));
+  }
+  all.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  res.json({ total: all.length, records: all.slice(offset, offset + limit) });
+});
+
 // ---------- 静态资源 ----------
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 
-// 工具
+// 工具函数
 function sanitize(s) {
   return String(s).replace(/[^a-zA-Z0-9_.@-]/g, '_');
 }
+
 async function loadUserImage(username, id) {
   const fp = path.join(IMAGES_DIR, sanitize(username), `${sanitize(id)}.png`);
   try { return await fs.readFile(fp); } catch { return null; }
+}
+
+async function loadUserMetas(username) {
+  const userDir = path.join(IMAGES_DIR, sanitize(username));
+  let files;
+  try { files = await fs.readdir(userDir); } catch { return []; }
+  const metas = [];
+  for (const f of files) {
+    if (!f.endsWith('.json')) continue;
+    if (f.includes('_input')) continue; // 跳过输入图的 json(如果有)
+    try {
+      const meta = JSON.parse(await fs.readFile(path.join(userDir, f), 'utf8'));
+      metas.push(meta);
+    } catch { /* skip corrupt */ }
+  }
+  metas.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  return metas;
 }
 
 // ---------- 启动 ----------

@@ -3,6 +3,7 @@ const $ = (id) => document.getElementById(id);
 let models = [];
 let pendingRefs = []; // { kind:'file', file } | { kind:'id', id, url }
 let lastImageId = null;
+let currentSessionId = null;
 
 async function api(url, opts = {}) {
   const r = await fetch(url, opts);
@@ -11,24 +12,50 @@ async function api(url, opts = {}) {
 }
 
 async function init() {
-  // 用户信息 + 配额
   const me = await (await api('/api/me')).json();
   $('who').textContent = me.user.username;
   $('remaining').textContent = me.remaining;
   $('quota').textContent = me.dailyQuota;
   if (me.user.role === 'admin') $('adminLink').style.display = 'inline';
 
-  // 模型
   models = await (await api('/api/models')).json();
   $('model').innerHTML = models.map((m) => `<option value="${m.id}">${m.label}</option>`).join('');
-  updateModelNote();
-
+  updateModelUI();
   await loadHistory();
 }
 
-function updateModelNote() {
+function updateModelUI() {
   const m = models.find((x) => x.id === $('model').value);
   $('modelNote').textContent = m?.note || '';
+  renderParams(m);
+}
+
+function renderParams(m) {
+  const area = $('paramsArea');
+  area.innerHTML = '';
+  if (!m || !m.params) return;
+  for (const [key, cfg] of Object.entries(m.params)) {
+    const label = document.createElement('label');
+    label.textContent = cfg.label || key;
+    area.appendChild(label);
+    if (cfg.type === 'select' && cfg.options) {
+      const sel = document.createElement('select');
+      sel.dataset.paramKey = key;
+      sel.className = 'model-param';
+      sel.innerHTML = cfg.options.map((o) =>
+        `<option value="${o}"${o === cfg.default ? ' selected' : ''}>${o}</option>`
+      ).join('');
+      area.appendChild(sel);
+    }
+  }
+}
+
+function collectParams() {
+  const params = {};
+  document.querySelectorAll('.model-param').forEach((el) => {
+    params[el.dataset.paramKey] = el.value;
+  });
+  return params;
 }
 
 function renderRefs() {
@@ -50,9 +77,11 @@ async function generate() {
   const fd = new FormData();
   fd.append('model', $('model').value);
   fd.append('prompt', prompt);
+  fd.append('params', JSON.stringify(collectParams()));
+  if (currentSessionId) fd.append('sessionId', currentSessionId);
   for (const r of pendingRefs) {
     if (r.kind === 'file') fd.append('refImages', r.file);
-    else if (r.kind === 'id') fd.append('prevImageId', r.id); // 取最后一个 id 引用
+    else if (r.kind === 'id') fd.append('prevImageId', r.id);
   }
 
   $('genBtn').disabled = true;
@@ -62,7 +91,8 @@ async function generate() {
     const data = await r.json();
     if (!r.ok) { $('err').textContent = data.error || '生成失败'; $('resultBox').innerHTML = '<span class="muted">生成失败</span>'; return; }
     lastImageId = data.id;
-    showResult(data.imageUrl);
+    currentSessionId = data.sessionId;
+    showResult(data.imageUrl, data.id);
     $('remaining').textContent = data.remaining;
     await loadHistory();
   } catch (e) {
@@ -73,26 +103,30 @@ async function generate() {
   }
 }
 
-function showResult(url) {
+function showResult(url, id) {
   $('resultBox').innerHTML = `<img src="${url}" />`;
   $('useAsRefBtn').disabled = false;
+  $('newSessionBtn').disabled = false;
   const dl = $('downloadBtn');
-  dl.href = url; dl.style.display = 'inline-block';
+  dl.href = `/api/image/${id}/download`; dl.style.display = 'inline-block';
 }
 
 async function loadHistory() {
   const list = await (await api('/api/history')).json();
   $('history').innerHTML = list.map((h) =>
-    `<img src="${h.imageUrl}" title="${(h.prompt||'').replace(/"/g,'&quot;')}" data-id="${h.id}" data-url="${h.imageUrl}"/>`
+    `<img src="${h.imageUrl}" title="${esc(h.prompt)}" data-id="${h.id}" data-url="${h.imageUrl}"/>`
   ).join('');
   $('history').querySelectorAll('img').forEach((img) => {
-    img.onclick = () => { lastImageId = img.dataset.id; showResult(img.dataset.url); };
+    img.onclick = () => { lastImageId = img.dataset.id; showResult(img.dataset.url, img.dataset.id); };
   });
 }
 
-// 事件
-$('model').onchange = updateModelNote;
+function esc(s) { return (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+// Events
+$('model').onchange = updateModelUI;
 $('genBtn').onclick = generate;
+$('prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.ctrlKey) generate(); });
 $('refFile').onchange = (e) => {
   for (const f of e.target.files) pendingRefs.push({ kind: 'file', file: f });
   e.target.value = '';
@@ -101,10 +135,19 @@ $('refFile').onchange = (e) => {
 $('clearRefBtn').onclick = () => { pendingRefs = []; renderRefs(); };
 $('useAsRefBtn').onclick = () => {
   if (!lastImageId) return;
-  // 用当前结果作为参考图(多轮编辑)
   pendingRefs = [{ kind: 'id', id: lastImageId, url: `/api/image/${lastImageId}` }];
   renderRefs();
   $('prompt').focus();
+};
+$('newSessionBtn').onclick = () => {
+  currentSessionId = null;
+  pendingRefs = [];
+  renderRefs();
+  $('prompt').value = '';
+  $('resultBox').innerHTML = '<span class="muted">新会话已开始</span>';
+  $('useAsRefBtn').disabled = true;
+  $('newSessionBtn').disabled = true;
+  $('downloadBtn').style.display = 'none';
 };
 $('logoutBtn').onclick = async () => {
   await fetch('/api/logout', { method: 'POST' });
