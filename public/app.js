@@ -1,9 +1,9 @@
-// 工作台逻辑
 const $ = (id) => document.getElementById(id);
 let models = [];
-let pendingRefs = []; // { kind:'file', file } | { kind:'id', id, url }
+let pendingRefs = [];
 let lastImageId = null;
 let currentSessionId = null;
+let history = [];
 
 async function api(url, opts = {}) {
   const r = await fetch(url, opts);
@@ -11,68 +11,109 @@ async function api(url, opts = {}) {
   return r;
 }
 
+// ---- Init ----
 async function init() {
   const me = await (await api('/api/me')).json();
   $('who').textContent = me.user.username;
   $('remaining').textContent = me.remaining;
   $('quota').textContent = me.dailyQuota;
-  if (me.user.role === 'admin') $('adminLink').style.display = 'inline';
+  if (me.user.role === 'admin') $('adminLink').style.display = '';
 
   models = await (await api('/api/models')).json();
   $('model').innerHTML = models.map((m) => `<option value="${m.id}">${m.label}</option>`).join('');
-  updateModelUI();
-  await loadHistory();
+  renderParams();
+  await loadSessions();
 }
 
-function updateModelUI() {
+// ---- Params ----
+function renderParams() {
   const m = models.find((x) => x.id === $('model').value);
-  $('modelNote').textContent = m?.note || '';
-  renderParams(m);
-}
-
-function renderParams(m) {
-  const area = $('paramsArea');
-  area.innerHTML = '';
-  if (!m || !m.params) return;
+  const bar = $('paramsBar');
+  bar.innerHTML = '';
+  if (!m?.params) return;
   for (const [key, cfg] of Object.entries(m.params)) {
-    const label = document.createElement('label');
-    label.textContent = cfg.label || key;
-    area.appendChild(label);
-    if (cfg.type === 'select' && cfg.options) {
-      const sel = document.createElement('select');
-      sel.dataset.paramKey = key;
-      sel.className = 'model-param';
-      sel.innerHTML = cfg.options.map((o) =>
-        `<option value="${o}"${o === cfg.default ? ' selected' : ''}>${o}</option>`
-      ).join('');
-      area.appendChild(sel);
-    }
+    if (cfg.type !== 'select') continue;
+    const chip = document.createElement('span');
+    chip.className = 'param-chip';
+    chip.innerHTML = `${cfg.label} <select data-param-key="${key}" class="model-param">${cfg.options.map((o) =>
+      `<option value="${o}"${o === cfg.default ? ' selected' : ''}>${o}</option>`).join('')}</select>`;
+    bar.appendChild(chip);
   }
 }
-
 function collectParams() {
-  const params = {};
-  document.querySelectorAll('.model-param').forEach((el) => {
-    params[el.dataset.paramKey] = el.value;
-  });
-  return params;
+  const p = {};
+  document.querySelectorAll('.model-param').forEach((el) => { p[el.dataset.paramKey] = el.value; });
+  return p;
 }
+$('model').onchange = renderParams;
 
+// ---- Refs ----
 function renderRefs() {
-  $('refStrip').innerHTML = pendingRefs.map((r, i) => {
+  $('refPreview').innerHTML = pendingRefs.map((r, i) => {
     const url = r.kind === 'file' ? URL.createObjectURL(r.file) : r.url;
-    const name = r.kind === 'file' ? r.file.name : '历史图';
-    return `<span class="chip"><img src="${url}"/>${name}<span class="x" data-i="${i}">✕</span></span>`;
+    return `<span class="chip"><img src="${url}"/><span class="x" data-i="${i}">✕</span></span>`;
   }).join('');
-  $('refStrip').querySelectorAll('.x').forEach((el) => {
+  $('refPreview').querySelectorAll('.x').forEach((el) => {
     el.onclick = () => { pendingRefs.splice(+el.dataset.i, 1); renderRefs(); };
   });
 }
+$('attachBtn').onclick = () => $('refFile').click();
+$('refFile').onchange = (e) => {
+  for (const f of e.target.files) pendingRefs.push({ kind: 'file', file: f });
+  e.target.value = '';
+  renderRefs();
+};
 
+// ---- Chat messages ----
+function addMsg(type, content) {
+  const el = document.createElement('div');
+  el.className = `msg ${type}`;
+  const avatar = type === 'ai' ? '✦' : '⧫';
+  el.innerHTML = `<div class="avatar">${avatar}</div><div class="bubble">${content}</div>`;
+  $('chatBody').appendChild(el);
+  $('chatBody').scrollTop = $('chatBody').scrollHeight;
+  return el;
+}
+
+function addUserMsg(prompt, refUrls) {
+  let content = '';
+  if (refUrls.length) {
+    content += `<div class="ref-imgs">${refUrls.map((u) => `<img src="${u}"/>`).join('')}</div>`;
+  }
+  content += esc(prompt);
+  addMsg('user', content);
+}
+
+function addAiImage(imageUrl, imageId, model, params) {
+  const paramStr = Object.entries(params || {}).map(([k, v]) => `${k}:${v}`).join(' ');
+  const content = `<img src="${imageUrl}" onclick="openLightbox('${imageUrl}')" />
+    <div class="meta">${model?.split('/').pop() || ''}${paramStr ? ' · ' + paramStr : ''}</div>
+    <div class="img-actions">
+      <button class="ghost sm" onclick="useAsRef('${imageId}','${imageUrl}')">继续修改</button>
+      <a href="/api/image/${imageId}/download" class="btn ghost sm" download>下载</a>
+    </div>`;
+  addMsg('ai', content);
+}
+
+function addAiTyping() {
+  const el = addMsg('ai', '<div class="typing"><span></span><span></span><span></span></div>');
+  el.id = 'typing';
+  return el;
+}
+
+// ---- Generate ----
 async function generate() {
   $('err').textContent = '';
   const prompt = $('prompt').value.trim();
-  if (!prompt) { $('err').textContent = '请输入提示词'; return; }
+  if (!prompt) return;
+
+  // 清除 welcome
+  const welcome = $('chatBody').querySelector('.welcome');
+  if (welcome) welcome.remove();
+
+  // 展示用户消息
+  const refUrls = pendingRefs.map((r) => r.kind === 'file' ? URL.createObjectURL(r.file) : r.url);
+  addUserMsg(prompt, refUrls);
 
   const fd = new FormData();
   fd.append('model', $('model').value);
@@ -84,74 +125,114 @@ async function generate() {
     else if (r.kind === 'id') fd.append('prevImageId', r.id);
   }
 
+  $('prompt').value = '';
+  $('prompt').style.height = 'auto';
+  pendingRefs = [];
+  renderRefs();
   $('genBtn').disabled = true;
-  $('resultBox').innerHTML = '<div class="spinner"></div>';
+
+  const typing = addAiTyping();
   try {
     const r = await api('/api/generate', { method: 'POST', body: fd });
     const data = await r.json();
-    if (!r.ok) { $('err').textContent = data.error || '生成失败'; $('resultBox').innerHTML = '<span class="muted">生成失败</span>'; return; }
+    typing.remove();
+    if (!r.ok) {
+      showError(data.error || '生成失败');
+      return;
+    }
     lastImageId = data.id;
     currentSessionId = data.sessionId;
-    showResult(data.imageUrl, data.id);
     $('remaining').textContent = data.remaining;
-    await loadHistory();
+    addAiImage(data.imageUrl, data.id, $('model').value, collectParams());
+    await loadSessions();
   } catch (e) {
-    $('err').textContent = e.message || '网络错误';
-    $('resultBox').innerHTML = '<span class="muted">生成失败</span>';
+    typing.remove();
+    showError(e.message || '网络错误');
   } finally {
     $('genBtn').disabled = false;
+    $('prompt').focus();
   }
 }
 
-function showResult(url, id) {
-  $('resultBox').innerHTML = `<img src="${url}" />`;
-  $('useAsRefBtn').disabled = false;
-  $('newSessionBtn').disabled = false;
-  const dl = $('downloadBtn');
-  dl.href = `/api/image/${id}/download`; dl.style.display = 'inline-block';
+function showError(msg) {
+  const toast = document.createElement('div');
+  toast.className = 'error-toast';
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
 }
 
-async function loadHistory() {
-  const list = await (await api('/api/history')).json();
-  $('history').innerHTML = list.map((h) =>
-    `<img src="${h.imageUrl}" title="${esc(h.prompt)}" data-id="${h.id}" data-url="${h.imageUrl}"/>`
-  ).join('');
-  $('history').querySelectorAll('img').forEach((img) => {
-    img.onclick = () => { lastImageId = img.dataset.id; showResult(img.dataset.url, img.dataset.id); };
-  });
-}
-
-function esc(s) { return (s || '').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
-
-// Events
-$('model').onchange = updateModelUI;
-$('genBtn').onclick = generate;
-$('prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.ctrlKey) generate(); });
-$('refFile').onchange = (e) => {
-  for (const f of e.target.files) pendingRefs.push({ kind: 'file', file: f });
-  e.target.value = '';
-  renderRefs();
-};
-$('clearRefBtn').onclick = () => { pendingRefs = []; renderRefs(); };
-$('useAsRefBtn').onclick = () => {
-  if (!lastImageId) return;
-  pendingRefs = [{ kind: 'id', id: lastImageId, url: `/api/image/${lastImageId}` }];
+// ---- Use as ref ----
+window.useAsRef = (id, url) => {
+  pendingRefs = [{ kind: 'id', id, url }];
   renderRefs();
   $('prompt').focus();
 };
-$('newSessionBtn').onclick = () => {
+
+// ---- Sessions sidebar ----
+async function loadSessions() {
+  history = await (await api('/api/history')).json();
+  const sessions = new Map();
+  for (const h of history) {
+    const sid = h.sessionId || h.id;
+    if (!sessions.has(sid)) sessions.set(sid, { prompt: h.prompt, time: h.createdAt, count: 0 });
+    sessions.get(sid).count++;
+  }
+  $('sessionList').innerHTML = [...sessions.entries()].map(([sid, s]) =>
+    `<div class="s-item${sid === currentSessionId ? ' active' : ''}" data-sid="${sid}" title="${esc(s.prompt)}">
+      ${esc(s.prompt?.slice(0, 40) || '未命名')}
+      <span style="font-size:11px;color:var(--muted);margin-left:auto">${s.count}</span>
+    </div>`
+  ).join('');
+  $('sessionList').querySelectorAll('.s-item').forEach((el) => {
+    el.onclick = () => loadSession(el.dataset.sid);
+  });
+}
+
+async function loadSession(sid) {
+  currentSessionId = sid;
+  $('chatBody').innerHTML = '';
+  const items = history.filter((h) => (h.sessionId || h.id) === sid).reverse();
+  for (const h of items) {
+    addUserMsg(h.prompt, (h.inputUrls || []).slice(0, 2));
+    addAiImage(h.imageUrl, h.id, h.model, h.params);
+  }
+  if (items.length) lastImageId = items[items.length - 1].id;
+  document.querySelectorAll('.s-item').forEach((el) => el.classList.toggle('active', el.dataset.sid === sid));
+}
+
+// ---- New chat ----
+$('newChatBtn').onclick = () => {
   currentSessionId = null;
+  lastImageId = null;
   pendingRefs = [];
   renderRefs();
   $('prompt').value = '';
-  $('resultBox').innerHTML = '<span class="muted">新会话已开始</span>';
-  $('useAsRefBtn').disabled = true;
-  $('newSessionBtn').disabled = true;
-  $('downloadBtn').style.display = 'none';
-};
-$('logoutBtn').onclick = async () => {
-  await fetch('/api/logout', { method: 'POST' });
-  location.href = '/';
+  $('chatBody').innerHTML = '<div class="welcome"><h2>GImage</h2><p>选择模型,输入提示词,开始创作</p></div>';
+  document.querySelectorAll('.s-item').forEach((el) => el.classList.remove('active'));
 };
 
-init().catch((e) => console.error(e));
+// ---- Events ----
+$('genBtn').onclick = generate;
+$('prompt').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); generate(); }
+});
+$('prompt').addEventListener('input', () => {
+  $('prompt').style.height = 'auto';
+  $('prompt').style.height = Math.min($('prompt').scrollHeight, 120) + 'px';
+});
+$('logoutBtn').onclick = async () => { await fetch('/api/logout', { method: 'POST' }); location.href = '/'; };
+$('openSidebar').onclick = () => $('sidebar').classList.remove('collapsed');
+$('closeSidebar').onclick = () => $('sidebar').classList.add('collapsed');
+
+window.openLightbox = (url) => {
+  const lb = document.createElement('div');
+  lb.className = 'lightbox';
+  lb.innerHTML = `<span class="close">&times;</span><img src="${url}" />`;
+  lb.onclick = () => lb.remove();
+  document.body.appendChild(lb);
+};
+
+function esc(s) { return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+init().catch(console.error);

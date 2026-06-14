@@ -67,10 +67,10 @@ async function generateViaGemini(modelId, prompt, inputImages, params) {
   });
 
   const text = await resp.text();
-  if (!resp.ok) throw new Error(`生图失败 (${resp.status}): ${truncate(text)}`);
+  if (!resp.ok) throw new Error(friendlyError(resp.status, text));
 
   let json;
-  try { json = JSON.parse(text); } catch { throw new Error(resp.status === 500 ? 'ZenMux 返回非 JSON — 请检查 API Key 是否有效' : `返回非 JSON: ${truncate(text)}`); }
+  try { json = JSON.parse(text); } catch { throw new Error(resp.status === 500 ? '请检查 API Key 是否有效' : `返回非 JSON: ${truncate(text)}`); }
 
   const candParts = json?.candidates?.[0]?.content?.parts || [];
   for (const part of candParts) {
@@ -115,7 +115,7 @@ async function generateViaOpenAIImages(modelId, prompt, inputImages, params) {
   }
 
   const text = await resp.text();
-  if (!resp.ok) throw new Error(`生图失败 (${resp.status}): ${truncate(text)}`);
+  if (!resp.ok) throw new Error(friendlyError(resp.status, text));
 
   let json;
   try { json = JSON.parse(text); } catch { throw new Error(`返回非 JSON: ${truncate(text)}`); }
@@ -134,4 +134,21 @@ async function generateViaOpenAIImages(modelId, prompt, inputImages, params) {
 function truncate(s, n = 500) {
   s = String(s);
   return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
+function friendlyError(status, raw) {
+  try {
+    const json = JSON.parse(raw);
+    const msg = json?.error?.message || json?.message || '';
+    if (msg.includes('safety') || msg.includes('rejected'))
+      return '提示词触发了安全审核,请调整内容后重试';
+    if (msg.includes('quota') || msg.includes('rate'))
+      return '服务器请求频率超限或配额不足,请稍后重试';
+    if (msg.includes('permission') || msg.includes('auth') || status === 401 || status === 403)
+      return 'API Key 无效或无权限,请联系管理员';
+    if (msg) return msg;
+  } catch { /* not JSON */ }
+  if (String(raw).startsWith('<!DOCTYPE') || String(raw).startsWith('<html'))
+    return '请检查 API Key 是否有效(服务端返回了网页而非 API 响应)';
+  return `生图失败 (${status})`;
 }

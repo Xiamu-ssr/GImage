@@ -3,58 +3,67 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GImage · 工作台</title>
+  <title>GImage</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <div class="topbar">
-    <div class="brand">GImage</div>
-    <div class="right">
-      <span class="badge">今日剩余 <b id="remaining">-</b> / <span id="quota">-</span></span>
-      <span id="who"></span>
-      <a href="/gallery.html">图集</a>
-      <a id="adminLink" href="/admin.html" style="display:none">管理</a>
-      <button class="ghost" id="logoutBtn">退出</button>
-    </div>
-  </div>
-
-  <div class="layout">
-    <!-- 左:控制面板 -->
-    <div class="card">
-      <label>模型</label>
-      <select id="model"></select>
-      <div class="muted" id="modelNote" style="margin-top:6px"></div>
-
-      <!-- 动态参数区 -->
-      <div id="paramsArea"></div>
-
-      <label>提示词</label>
-      <textarea id="prompt" rows="5" placeholder="描述你想要的画面,或描述如何修改下方参考图…"></textarea>
-
-      <label>参考图(以图改图 / 多轮编辑,可选)</label>
-      <input type="file" id="refFile" accept="image/*" multiple />
-      <div class="thumb-strip" id="refStrip"></div>
-
-      <div style="margin-top:18px" class="row">
-        <button id="genBtn" style="flex:1">生成</button>
-        <button class="ghost" id="clearRefBtn">清空参考图</button>
+  <div class="chat-wrap">
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <div class="s-head">
+        <span class="brand">GImage</span>
+        <button class="icon-btn" id="closeSidebar" title="收起">✕</button>
       </div>
-      <div class="error" id="err"></div>
-    </div>
-
-    <!-- 右:结果 + 历史 -->
-    <div class="card">
-      <div class="result-box" id="resultBox">
-        <span class="muted">生成的图片会显示在这里</span>
+      <div style="padding:8px">
+        <button style="width:100%" id="newChatBtn">+ 新对话</button>
       </div>
-      <div class="row" style="margin-top:12px; justify-content:flex-end; gap:8px">
-        <button class="ghost" id="useAsRefBtn" disabled>以这张继续修改</button>
-        <button class="ghost" id="newSessionBtn" disabled>新会话</button>
-        <a class="btn ghost" id="downloadBtn" style="display:none" download>下载原图</a>
+      <div class="s-list" id="sessionList"></div>
+      <div class="s-foot">
+        <div class="s-nav">
+          <a href="/gallery.html">图集</a>
+          <a id="adminLink" href="/admin.html" style="display:none">管理</a>
+        </div>
+        <div class="row" style="justify-content:space-between">
+          <span class="muted" id="who" style="font-size:12px"></span>
+          <button class="ghost sm" id="logoutBtn">退出</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 主区域 -->
+    <div class="main">
+      <div class="topbar">
+        <div class="left">
+          <button class="icon-btn" id="openSidebar" title="展开侧栏">☰</button>
+          <span class="badge">剩余 <b id="remaining">-</b>/<span id="quota">-</span></span>
+        </div>
+        <div class="right">
+          <select id="model" style="width:auto;padding:5px 10px;font-size:12px;border-radius:8px;background:var(--panel-2);max-width:240px"></select>
+        </div>
       </div>
 
-      <h3 style="margin:24px 0 0">最近生成</h3>
-      <div class="history-grid" id="history"></div>
+      <!-- 聊天消息区 -->
+      <div class="chat-body" id="chatBody">
+        <div class="welcome">
+          <h2>GImage</h2>
+          <p>选择模型,输入提示词,开始创作</p>
+        </div>
+      </div>
+
+      <!-- 底部输入栏 -->
+      <div class="input-bar">
+        <div class="input-inner">
+          <div class="ref-preview" id="refPreview"></div>
+          <div class="input-row">
+            <input type="file" id="refFile" accept="image/*" multiple hidden />
+            <button class="icon-btn" id="attachBtn" title="上传参考图">📎</button>
+            <textarea id="prompt" rows="1" placeholder="描述你想要的画面…" autofocus></textarea>
+            <button class="send-btn" id="genBtn" title="生成 (Ctrl+Enter)">➤</button>
+          </div>
+          <div class="input-opts" id="paramsBar"></div>
+        </div>
+        <div class="error" id="err" style="text-align:center"></div>
+      </div>
     </div>
   </div>
 
