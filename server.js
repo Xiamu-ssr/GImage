@@ -150,25 +150,8 @@ app.post('/api/generate', requireLogin, upload.array('refImages', 4), async (req
     // 所有协议都保存最后一张输出图(用于非 gemini 的多轮回传)
     sessionLastImage.set(sessionId, { buffer, mimeType });
 
-    // 计算真实成本(用 API 返回的 token 数 × ZenMux 标价)
-    let realCost = estimatedCost;
-    if (usage) {
-      const prices = modelDef.tokenPricing || {};
-      let inputTokens = 0, outputTokens = 0;
-      if (modelDef.protocol === 'gemini') {
-        inputTokens = usage.promptTokenCount || 0;
-        outputTokens = usage.candidatesTokenCount || 0;
-      } else {
-        inputTokens = usage.input_tokens || usage.prompt_tokens || 0;
-        outputTokens = usage.output_tokens || usage.completion_tokens || 0;
-      }
-      const inputPrice = prices.input || 0;
-      const outputPrice = prices.output || 0;
-      if (inputPrice || outputPrice) {
-        realCost = +((inputTokens * inputPrice + outputTokens * outputPrice) / 1_000_000).toFixed(4);
-        if (realCost < 0.001) realCost = 0.001;
-      }
-    }
+    // 固定价格扣费
+    const realCost = estimatedCost;
 
     // 落盘
     const id = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;

@@ -5,9 +5,8 @@
       "label": "Nano Banana 2 (Gemini 3.1 Flash)",
       "protocol": "gemini",
       "supportsEdit": true,
-      "costPerImage": 0.005,
-      "tokenPricing": { "input": 0.15, "output": 3.50 },
-      "note": "快速高效,约 $0.004/张",
+      "costPerImage": 0.07,
+      "note": "快速高效,$0.07/张",
       "params": {
         "aspectRatio": {
           "label": "比例",
@@ -29,8 +28,7 @@
       "protocol": "gemini",
       "supportsEdit": true,
       "costPerImage": 0.13,
-      "tokenPricing": { "input": 3.00, "output": 15.00 },
-      "note": "质量最高,支持 4K,约 $0.10-0.15/张",
+      "note": "质量最高,$0.13/张",
       "params": {
         "aspectRatio": {
           "label": "比例",
@@ -52,7 +50,7 @@
       "protocol": "openai-images",
       "supportsEdit": true,
       "costPerImage": 0.15,
-      "note": "OpenAI 出品,约 $0.15/张",
+      "note": "OpenAI 出品,$0.15/张",
       "params": {
         "size": {
           "label": "尺寸",
@@ -73,8 +71,8 @@
       "label": "Qwen-Image-2.0-Pro",
       "protocol": "imagen",
       "supportsEdit": false,
-      "costPerImage": 0.03,
-      "note": "通义出品,约 $0.03/张",
+      "costPerImage": 0.07,
+      "note": "通义出品,$0.07/张",
       "params": {
         "aspectRatio": {
           "label": "比例",
