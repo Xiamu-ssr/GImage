@@ -39,6 +39,12 @@ app.use(session({
   cookie: { httpOnly: true, maxAge: 7 * 24 * 3600 * 1000, sameSite: 'lax' },
 }));
 
+// ---------- 请求日志(生图相关) ----------
+app.use('/api/login', (req, res, next) => {
+  console.log(`[REQ] login attempt: ${req.body?.username || '?'}`);
+  next();
+});
+
 // ---------- 认证 ----------
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body || {};
@@ -76,54 +82,93 @@ app.get('/api/models', requireLogin, async (req, res) => {
   const models = await loadModels();
   res.json(models.map((m) => ({
     id: m.id, label: m.label, supportsEdit: m.supportsEdit, note: m.note,
-    params: m.params || {},
+    params: m.params || {}, costPerImage: m.costPerImage || 0, protocol: m.protocol,
   })));
 });
 
-// ---------- 生图(含会话记录与输入图保存) ----------
+// ---------- 生图(多轮完整历史) ----------
+// Gemini 用 contents 历史(限最近 3 轮避免 context 爆炸)
+// 非 gemini 模型:同一会话自动把上一轮输出图作为输入传回
+const sessionHistories = new Map(); // gemini: {contents:[...]}
+const sessionLastImage = new Map(); // 非 gemini: {buffer, mimeType}
+const SESSION_HISTORY_TTL = 2 * 60 * 60 * 1000;
+
 app.post('/api/generate', requireLogin, upload.array('refImages', 4), async (req, res) => {
   const username = req.session.user.username;
   try {
+    console.log(`[GEN] ${username} model=${req.body?.model} files=${(req.files||[]).length}`);
     const acc = await findAccount(username);
     if (!acc) return res.status(401).json({ error: '账户已不存在' });
 
-    const { model, prompt, prevImageId, sessionId: reqSessionId } = req.body || {};
+    const { model, prompt, sessionId: reqSessionId } = req.body || {};
     const modelDef = await getModel(model);
     if (!modelDef) return res.status(400).json({ error: '无效模型' });
 
-    const cost = modelDef.costPerImage || 0.05;
+    const estimatedCost = modelDef.costPerImage || 0.05;
 
-    // 解析模型参数
     let params = {};
     try { params = JSON.parse(req.body.params || '{}'); } catch { /* ignore */ }
 
-    // 额度检查(美元)
-    if (!(await canAfford(username, acc.dailyBudget, cost))) {
+    if (!(await canAfford(username, acc.dailyBudget, estimatedCost))) {
       return res.status(429).json({ error: `今日额度已用完(每日 $${acc.dailyBudget}),请明天再试` });
     }
 
-    // 收集参考图
+    // 收集当轮上传的参考图
     const inputImages = [];
     for (const f of req.files || []) {
       inputImages.push({ mimeType: f.mimetype || 'image/png', base64: f.buffer.toString('base64') });
     }
-    if (prevImageId) {
-      const prev = await loadUserImage(username, prevImageId);
-      if (prev) inputImages.push({ mimeType: 'image/png', base64: prev.toString('base64') });
+
+    const sessionId = reqSessionId || `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+
+    // 多轮逻辑:按协议分别处理
+    let history = [];
+    if (modelDef.protocol === 'gemini') {
+      // Gemini: 发送完整 contents 历史,但限制最近 3 轮(6 条 user/model)
+      const full = sessionHistories.get(sessionId)?.contents || [];
+      history = full.slice(-6); // 最多 3 轮
+    } else {
+      // 非 gemini(openai-images/imagen):无 history 支持,但同一会话自动带上一轮输出图
+      if (inputImages.length === 0) {
+        const lastImg = sessionLastImage.get(sessionId);
+        if (lastImg) {
+          inputImages.push({ mimeType: lastImg.mimeType, base64: lastImg.buffer.toString('base64') });
+        }
+      }
     }
 
-    const { buffer, mimeType } = await generateImage({ model, prompt, inputImages, params });
+    const { buffer, mimeType, usage, historyEntry } = await generateImage({
+      model, prompt, inputImages, params, history,
+    });
 
-    // 落盘:输出图 + 输入图 + 完整会话记录
+    // 更新会话缓存
+    if (historyEntry && modelDef.protocol === 'gemini') {
+      const prev = sessionHistories.get(sessionId)?.contents || [];
+      const newContents = [...prev, historyEntry.user, historyEntry.model];
+      sessionHistories.set(sessionId, { contents: newContents, updatedAt: Date.now() });
+    }
+    // 所有协议都保存最后一张输出图(用于非 gemini 的多轮回传)
+    sessionLastImage.set(sessionId, { buffer, mimeType });
+
+    // 计算真实成本(用 usageMetadata 的 token 数)
+    let realCost = estimatedCost;
+    if (usage && modelDef.protocol === 'gemini') {
+      const outputTokens = usage.candidatesTokenCount || 0;
+      const inputTokens = usage.promptTokenCount || 0;
+      // 从 models 页拿到的 ZenMux 标价(per M tokens)
+      const prices = modelDef.tokenPricing || {};
+      const inputPrice = prices.input || 0.30; // $/M tokens
+      const outputPrice = prices.output || 2.50;
+      realCost = +((inputTokens * inputPrice + outputTokens * outputPrice) / 1_000_000).toFixed(4);
+      if (realCost < 0.001) realCost = 0.001; // 最低 $0.001
+    }
+
+    // 落盘
     const id = `${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-    const sessionId = reqSessionId || id; // 没有 sessionId 就用当前 id 开新会话
     const userDir = path.join(IMAGES_DIR, sanitize(username));
     await fs.mkdir(userDir, { recursive: true });
-
-    // 保存输出图
     await fs.writeFile(path.join(userDir, `${id}.png`), buffer);
 
-    // 保存输入图(每张独立文件,方便管理端查看)
     const inputRefs = [];
     for (let i = 0; i < inputImages.length; i++) {
       const refName = `${id}_input${i}.png`;
@@ -131,25 +176,27 @@ app.post('/api/generate', requireLogin, upload.array('refImages', 4), async (req
       inputRefs.push(refName);
     }
 
-    // 元数据:完整的会话记录
     const meta = {
-      id, sessionId, username, model, prompt, params, cost,
+      id, sessionId, username, model, prompt, params,
+      cost: realCost,
+      usage: usage ? { input: usage.promptTokenCount, output: usage.candidatesTokenCount, total: usage.totalTokenCount } : null,
       inputRefs,
-      prevImageId: prevImageId || null,
       createdAt: new Date().toISOString(),
     };
     await fs.writeFile(path.join(userDir, `${id}.json`), JSON.stringify(meta, null, 2));
+    console.log(`[GEN] ${username} OK id=${id} cost=$${realCost} tokens=${usage?.totalTokenCount || '?'}`);
 
-    const spent = await consume(username, model, cost);
+    const spent = await consume(username, model, realCost);
     const remaining = await getRemaining(username, acc.dailyBudget);
     res.json({
-      ok: true, id, sessionId, cost,
+      ok: true, id, sessionId, cost: realCost,
       imageUrl: `/api/image/${id}`,
       mimeType,
       spent: +spent.toFixed(2),
       remaining: +remaining.toFixed(2),
     });
   } catch (err) {
+    console.error(`[ERR] generate ${username}:`, err.message);
     res.status(500).json({ error: err.message || '生图失败' });
   }
 });
@@ -310,18 +357,19 @@ app.get('/api/admin/all-records', requireLogin, requireAdmin, async (req, res) =
   res.json({ total: all.length, records: all.slice(offset, offset + limit) });
 });
 
-// ---------- 静态资源 ----------
-app.use(express.static(path.join(__dirname, 'public')));
+// ---------- 静态资源(禁止缓存 html/js,保证更新即时生效) ----------
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html') || filePath.endsWith('.js') || filePath.endsWith('.css')) {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+}));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 
 // 工具函数
 function sanitize(s) {
   return String(s).replace(/[^a-zA-Z0-9_.@-]/g, '_');
-}
-
-async function loadUserImage(username, id) {
-  const fp = path.join(IMAGES_DIR, sanitize(username), `${sanitize(id)}.png`);
-  try { return await fs.readFile(fp); } catch { return null; }
 }
 
 async function loadUserMetas(username) {

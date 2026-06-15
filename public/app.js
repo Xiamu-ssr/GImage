@@ -20,14 +20,64 @@ async function init() {
   if (me.user.role === 'admin') $('adminLink').style.display = '';
 
   models = await (await api('/api/models')).json();
-  $('model').innerHTML = models.map((m) => `<option value="${m.id}">${m.label}</option>`).join('');
-  renderParams();
+  selectModel(models[0]?.id);
   await loadSessions();
 }
 
+// ---- Model selector (dropdown with prices) ----
+let selectedModelId = null;
+
+function selectModel(id) {
+  selectedModelId = id;
+  $('model').value = id;
+  const m = models.find((x) => x.id === id);
+  if (m) {
+    $('modelBtn').innerHTML = `<span>${m.label}</span> <span style="color:var(--accent);margin-left:auto">$${m.costPerImage || '?'}</span>`;
+  }
+  renderDropdown();
+  renderParams();
+  renderModelHint(m);
+  closeDropdown();
+}
+
+function renderModelHint(m) {
+  let hint = '';
+  if (m && m.supportsEdit === false) {
+    hint = '<span style="color:var(--muted);font-size:11px;margin-left:8px">仅单轮生图</span>';
+  } else if (m && m.protocol === 'openai-images') {
+    hint = '<span style="color:var(--muted);font-size:11px;margin-left:8px">多轮基于上一张图</span>';
+  } else if (m && m.protocol === 'gemini') {
+    hint = '<span style="color:var(--muted);font-size:11px;margin-left:8px">支持多轮对话编辑</span>';
+  }
+  const el = document.getElementById('modelHint');
+  if (el) el.innerHTML = hint;
+}
+
+function renderDropdown() {
+  $('modelDropdown').innerHTML = models.map((m) =>
+    `<div class="model-opt${m.id === selectedModelId ? ' active' : ''}" data-id="${m.id}">
+      <div>
+        <div class="m-name">${m.label}</div>
+        <div class="m-note">${m.note || ''}</div>
+      </div>
+      <div class="m-price">$${m.costPerImage || '?'}</div>
+    </div>`
+  ).join('');
+  $('modelDropdown').querySelectorAll('.model-opt').forEach((el) => {
+    el.onclick = (e) => { e.stopPropagation(); selectModel(el.dataset.id); };
+  });
+}
+
+function closeDropdown() { $('modelDropdown').classList.remove('open'); }
+$('modelBtn').onclick = (e) => {
+  e.stopPropagation();
+  $('modelDropdown').classList.toggle('open');
+};
+document.addEventListener('click', closeDropdown);
+
 // ---- Params ----
 function renderParams() {
-  const m = models.find((x) => x.id === $('model').value);
+  const m = models.find((x) => x.id === selectedModelId);
   const bar = $('paramsBar');
   bar.innerHTML = '';
   if (!m?.params) return;
@@ -45,7 +95,7 @@ function collectParams() {
   document.querySelectorAll('.model-param').forEach((el) => { p[el.dataset.paramKey] = el.value; });
   return p;
 }
-$('model').onchange = renderParams;
+
 
 // ---- Refs ----
 function renderRefs() {
@@ -87,10 +137,12 @@ function addUserMsg(prompt, refUrls) {
 function addAiImage(imageUrl, imageId, model, params, cost) {
   const paramStr = Object.entries(params || {}).map(([k, v]) => `${k}:${v}`).join(' ');
   const costStr = cost ? ` · $${cost}` : '';
+  const m = models.find((x) => x.id === model);
+  const showContinue = m?.supportsEdit !== false;
   const content = `<img src="${imageUrl}" onclick="openLightbox('${imageUrl}')" />
     <div class="meta">${model?.split('/').pop() || ''}${paramStr ? ' · ' + paramStr : ''}${costStr}</div>
     <div class="img-actions">
-      <button class="ghost sm" onclick="useAsRef('${imageId}','${imageUrl}')">继续修改</button>
+      ${showContinue ? `<button class="ghost sm" onclick="useAsRef('${imageId}','${imageUrl}')">继续修改</button>` : ''}
       <a href="/api/image/${imageId}/download" class="btn ghost sm" download>下载</a>
     </div>`;
   addMsg('ai', content);
@@ -123,7 +175,6 @@ async function generate() {
   if (currentSessionId) fd.append('sessionId', currentSessionId);
   for (const r of pendingRefs) {
     if (r.kind === 'file') fd.append('refImages', r.file);
-    else if (r.kind === 'id') fd.append('prevImageId', r.id);
   }
 
   $('prompt').value = '';
@@ -163,11 +214,11 @@ function showError(msg) {
   setTimeout(() => toast.remove(), 4000);
 }
 
-// ---- Use as ref ----
+// ---- Use as ref (now just focuses input, server handles history) ----
 window.useAsRef = (id, url) => {
-  pendingRefs = [{ kind: 'id', id, url }];
-  renderRefs();
+  // 在同一 session 里,服务端已经有完整对话历史,用户只需要输入下一轮 prompt
   $('prompt').focus();
+  $('prompt').placeholder = '基于上一张图继续修改…';
 };
 
 // ---- Sessions sidebar ----

@@ -5,8 +5,9 @@
       "label": "Nano Banana 2 (Gemini 3.1 Flash)",
       "protocol": "gemini",
       "supportsEdit": true,
-      "costPerImage": 0.04,
-      "note": "快速高效,适合日常生图",
+      "costPerImage": 0.005,
+      "tokenPricing": { "input": 0.15, "output": 3.50 },
+      "note": "快速高效,约 $0.004/张",
       "params": {
         "aspectRatio": {
           "label": "比例",
@@ -28,7 +29,8 @@
       "protocol": "gemini",
       "supportsEdit": true,
       "costPerImage": 0.13,
-      "note": "质量最高,支持 4K 原生分辨率",
+      "tokenPricing": { "input": 3.00, "output": 15.00 },
+      "note": "质量最高,支持 4K,约 $0.10-0.15/张",
       "params": {
         "aspectRatio": {
           "label": "比例",
@@ -49,8 +51,8 @@
       "label": "GPT-Image-2 (OpenAI)",
       "protocol": "openai-images",
       "supportsEdit": true,
-      "costPerImage": 0.05,
-      "note": "OpenAI 出品,快速出图",
+      "costPerImage": 0.07,
+      "note": "OpenAI 出品,约 $0.04-0.10/张",
       "params": {
         "size": {
           "label": "尺寸",
@@ -69,16 +71,16 @@
     {
       "id": "qwen/qwen-image-2.0-pro",
       "label": "Qwen-Image-2.0-Pro",
-      "protocol": "openai-images",
+      "protocol": "imagen",
       "supportsEdit": false,
       "costPerImage": 0.03,
-      "note": "阿里通义出品,擅长信息图/海报",
+      "note": "通义出品,约 $0.03/张",
       "params": {
-        "size": {
-          "label": "尺寸",
+        "aspectRatio": {
+          "label": "比例",
           "type": "select",
-          "options": ["1024x1024", "1536x1024", "1024x1536"],
-          "default": "1024x1024"
+          "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9"],
+          "default": "1:1"
         }
       }
     }

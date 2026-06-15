@@ -38,7 +38,12 @@
           <span class="badge">剩余 <b id="remaining">-</b>/<span id="quota">-</span></span>
         </div>
         <div class="right">
-          <select id="model" style="width:auto;padding:5px 10px;font-size:12px;border-radius:8px;background:var(--panel-2);max-width:240px"></select>
+          <div class="model-selector" id="modelSelector">
+            <button class="ghost sm" id="modelBtn" style="min-width:180px;text-align:left">选择模型</button>
+            <div class="model-dropdown" id="modelDropdown"></div>
+          </div>
+          <input type="hidden" id="model" />
+          <span id="modelHint"></span>
         </div>
       </div>
 
