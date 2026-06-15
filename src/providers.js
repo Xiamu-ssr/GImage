@@ -195,13 +195,14 @@ async function generateViaOpenAIImages(modelId, prompt, inputImages, params) {
   let json;
   try { json = JSON.parse(text); } catch { throw new Error(`返回非 JSON: ${truncate(text)}`); }
 
+  const usage = json?.usage || null;
   const item = json?.data?.[0];
-  if (item?.b64_json) return { buffer: Buffer.from(item.b64_json, 'base64'), mimeType: 'image/png', usage: null, historyEntry: null };
+  if (item?.b64_json) return { buffer: Buffer.from(item.b64_json, 'base64'), mimeType: 'image/png', usage, historyEntry: null };
   if (item?.url) {
     const imgResp = await fetch(item.url);
     if (!imgResp.ok) throw new Error(`拉取图片 URL 失败 (${imgResp.status})`);
     const buf = Buffer.from(await imgResp.arrayBuffer());
-    return { buffer: buf, mimeType: imgResp.headers.get('content-type') || 'image/png', usage: null, historyEntry: null };
+    return { buffer: buf, mimeType: imgResp.headers.get('content-type') || 'image/png', usage, historyEntry: null };
   }
   throw new Error(`响应未包含图片: ${truncate(JSON.stringify(json))}`);
 }
