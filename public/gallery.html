@@ -3,32 +3,46 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GImage · 我的图集</title>
+  <title>GImage · 资产库</title>
   <link rel="stylesheet" href="/style.css" />
-  <style>
-    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; padding: 20px; }
-    .g-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-    .g-card img { width: 100%; aspect-ratio: 1; object-fit: cover; cursor: pointer; }
-    .g-card .meta { padding: 10px 14px; }
-    .g-card .meta .prompt { font-size: 13px; color: var(--text); max-height: 40px; overflow: hidden; text-overflow: ellipsis; }
-    .g-card .meta .info { font-size: 11px; color: var(--muted); margin-top: 4px; }
-    .g-card .actions { padding: 0 14px 12px; display: flex; gap: 8px; }
-    .lightbox { position: fixed; inset: 0; z-index: 999; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; }
-    .lightbox img { max-width: 95vw; max-height: 92vh; }
-    .lightbox .close { position: absolute; top: 16px; right: 24px; font-size: 28px; color: #fff; cursor: pointer; }
-    .session-sep { grid-column: 1 / -1; padding: 8px 0; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); margin-top: 8px; }
-  </style>
 </head>
 <body>
   <div class="topbar">
-    <div class="brand">GImage · 我的图集</div>
+    <div class="brand">GImage · 资产库</div>
     <div class="right">
       <a href="/app.html">工作台</a>
       <a id="adminLink" href="/admin.html" style="display:none">管理</a>
       <button class="ghost" id="logoutBtn">退出</button>
     </div>
   </div>
-  <div class="gallery" id="gallery"><span class="muted">加载中…</span></div>
-  <script src="/gallery.js"></script>
+
+  <div class="gallery-toolbar">
+    <div class="g-tabs" id="modalityTabs">
+      <button class="active" data-tab="all">全部</button>
+      <button data-tab="image">图片</button>
+      <button data-tab="video">视频</button>
+      <button data-tab="music">音乐</button>
+    </div>
+    <input type="search" id="searchInput" placeholder="搜索提示词…" />
+    <select id="sortSel">
+      <option value="newest">最新优先</option>
+      <option value="oldest">最旧优先</option>
+    </select>
+    <div class="spacer"></div>
+    <button class="ghost sm" id="batchToggle">批量管理</button>
+  </div>
+
+  <div class="gallery" id="gallery"><span class="muted" style="padding:20px">加载中…</span></div>
+
+  <div class="batch-bar" id="batchBar">
+    <span class="muted">已选 <b id="batchCount">0</b> 项</span>
+    <button class="ghost sm" id="batchSelectAll">全选</button>
+    <div class="spacer"></div>
+    <button class="ghost sm" id="batchDownload">下载已选</button>
+    <button class="danger sm" id="batchDelete">删除已选</button>
+    <button class="ghost sm" id="batchCancel">取消</button>
+  </div>
+
+  <script type="module" src="/gallery.js"></script>
 </body>
 </html>

@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '..');
 export const DATA_DIR = path.join(ROOT, 'data');
-export const IMAGES_DIR = path.join(DATA_DIR, 'images');
+export const ASSETS_DIR = path.join(DATA_DIR, 'images');
 export const USAGE_DIR = path.join(DATA_DIR, 'usage');
 export const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
 
@@ -14,7 +14,7 @@ export const SESSIONS_DIR = path.join(DATA_DIR, 'sessions');
 const writeChains = new Map();
 
 export async function ensureDirs() {
-  for (const dir of [DATA_DIR, IMAGES_DIR, USAGE_DIR, SESSIONS_DIR]) {
+  for (const dir of [DATA_DIR, ASSETS_DIR, USAGE_DIR, SESSIONS_DIR]) {
     await fs.mkdir(dir, { recursive: true });
   }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # GImage 一键安装脚本
 # 用法: bash setup.sh
-# 作用: 引导填入两个 ZenMux key,自动生成管理员账号密码与 .env,安装依赖。
+# 作用: 引导填入 ZenMux + MiniMax key,自动生成管理员账号密码与 .env,安装依赖。
 set -e
 
 cd "$(dirname "$0")"
@@ -45,8 +45,13 @@ printf "2) ${BOLD}管理密钥${RESET}(查余额用,sk-mg-v1-...,${DIM}可留空
 read -r MGMT_KEY
 
 echo
+printf "3) ${BOLD}MiniMax 密钥${RESET}(音乐生成用,直连 MiniMax 不经 zenmux,${DIM}可留空跳过,不填则音乐生成不可用${RESET}): "
+read -r MINIMAX_KEY
+echo "${DIM}   (默认按大陆平台 platform.minimaxi.com 的 key 配置;如果是海外账号,装完后手动把 .env 里 MINIMAX_BASE 改成 https://api.minimax.io/v1)${RESET}"
+
+echo
 # ---------- 3. 管理员账号 ----------
-printf "3) 管理员用户名 [${BOLD}admin${RESET}]: "
+printf "4) 管理员用户名 [${BOLD}admin${RESET}]: "
 read -r ADMIN_USER
 ADMIN_USER="${ADMIN_USER:-admin}"
 
@@ -55,7 +60,7 @@ ADMIN_PASS="$(node -e "console.log(require('crypto').randomBytes(9).toString('ba
 SESSION_SECRET="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
 
 echo
-printf "4) 监听端口 [${BOLD}3000${RESET}]: "
+printf "5) 监听端口 [${BOLD}3000${RESET}]: "
 read -r PORT
 PORT="${PORT:-3000}"
 
@@ -65,7 +70,11 @@ cat > .env <<EOF
 ZENMUX_API_KEY=$API_KEY
 ZENMUX_MANAGEMENT_KEY=$MGMT_KEY
 ZENMUX_OPENAI_BASE=https://zenmux.ai/api/v1
-ZENMUX_GEMINI_BASE=https://zenmux.ai/api/v1
+ZENMUX_GEMINI_BASE=https://zenmux.ai/api/vertex-ai/v1
+ZENMUX_VIDEO_BASE=https://zenmux.ai/api/v1
+
+MINIMAX_API_KEY=$MINIMAX_KEY
+MINIMAX_BASE=https://api.minimaxi.com/v1
 
 PORT=$PORT
 SESSION_SECRET=$SESSION_SECRET

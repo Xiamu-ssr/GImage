@@ -1,7 +1,7 @@
 {
   "name": "gimage",
   "version": "1.0.0",
-  "description": "自托管多账户网页生图站(zenmux 多模型,本地 JSON 存储)",
+  "description": "自托管多账户 AI 创作站(图片/视频/音乐生成,zenmux + MiniMax 多模型,本地 JSON 存储)",
   "type": "module",
   "main": "server.js",
   "scripts": {

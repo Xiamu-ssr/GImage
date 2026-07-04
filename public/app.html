@@ -20,7 +20,7 @@
       <div class="s-list" id="sessionList"></div>
       <div class="s-foot">
         <div class="s-nav">
-          <a href="/gallery.html">图集</a>
+          <a href="/gallery.html">资产库</a>
           <a id="adminLink" href="/admin.html" style="display:none">管理</a>
         </div>
         <div class="row" style="justify-content:space-between">
@@ -43,25 +43,28 @@
             <div class="model-dropdown" id="modelDropdown"></div>
           </div>
           <input type="hidden" id="model" />
-          <span id="modelHint"></span>
+          <span id="modelHint" class="model-hint"></span>
         </div>
       </div>
 
-      <!-- 聊天消息区 -->
-      <div class="chat-body" id="chatBody">
-        <div class="welcome">
-          <h2>GImage</h2>
-          <p>选择模型,输入提示词,开始创作</p>
-        </div>
+      <!-- 模式切换:图片 / 视频 / 音乐 -->
+      <div class="mode-bar">
+        <button class="mode-tab active" data-mode="image">🖼️ 图片生成</button>
+        <button class="mode-tab" data-mode="video">🎬 视频生成</button>
+        <button class="mode-tab" data-mode="music">🎵 音乐生成</button>
       </div>
+
+      <!-- 聊天消息区 -->
+      <div class="chat-body" id="chatBody"></div>
 
       <!-- 底部输入栏 -->
       <div class="input-bar">
         <div class="input-inner">
           <div class="ref-preview" id="refPreview"></div>
+          <div class="extra-fields" id="extraFields"></div>
           <div class="input-row">
             <input type="file" id="refFile" accept="image/*" multiple hidden />
-            <button class="icon-btn" id="attachBtn" title="上传参考图">📎</button>
+            <button class="icon-btn" id="attachBtn" title="添加参考图">📎</button>
             <textarea id="prompt" rows="1" placeholder="描述你想要的画面…" autofocus></textarea>
             <button class="send-btn" id="genBtn" title="生成 (Ctrl+Enter)">➤</button>
           </div>
@@ -72,6 +75,6 @@
     </div>
   </div>
 
-  <script src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -16,7 +16,7 @@ function usageFile(date) {
 
 /**
  * 每个用户的用量格式:
- * { "alice": { spent: 0.26, count: 2, history: [{model,cost,at}] } }
+ * { "alice": { spent: 0.26, count: 2, history: [{model,modality,cost,at}] } }
  */
 
 export async function getSpentToday(username, date = todayStr()) {
@@ -41,13 +41,13 @@ export async function canAfford(username, dailyBudget, cost, date = todayStr()) 
   return remaining >= cost;
 }
 
-/** 生图成功后扣费。返回扣费后的 spent。 */
-export async function consume(username, model, cost, date = todayStr()) {
+/** 生成成功后扣费(图片/视频/音乐共用)。返回扣费后的 spent。 */
+export async function consume(username, model, modality, cost, date = todayStr()) {
   const updated = await updateJSON(usageFile(date), {}, (usage) => {
     const cur = usage[username] || { spent: 0, count: 0, history: [] };
     cur.spent = +(cur.spent + cost).toFixed(4);
     cur.count += 1;
-    cur.history.push({ model, cost, at: new Date().toISOString() });
+    cur.history.push({ model, modality, cost, at: new Date().toISOString() });
     usage[username] = cur;
     return usage;
   });

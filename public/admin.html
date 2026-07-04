@@ -5,29 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GImage · 管理</title>
   <link rel="stylesheet" href="/style.css" />
-  <style>
-    .record { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
-    .record .r-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .record .r-head .user { font-weight: 600; }
-    .record .r-prompt { font-size: 14px; margin-bottom: 8px; white-space: pre-wrap; word-break: break-all; }
-    .record .r-images { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
-    .record .r-images img { height: 120px; border-radius: 8px; cursor: pointer; border: 1px solid var(--border); }
-    .record .r-images .input-label { font-size: 11px; color: var(--muted); text-align: center; }
-    .record .r-params { font-size: 12px; color: var(--muted); margin-top: 6px; }
-    .session-header { font-size: 13px; color: var(--accent); margin: 16px 0 6px; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
-    .tab-bar { display: flex; gap: 2px; background: var(--panel-2); border-radius: 8px; padding: 3px; margin-bottom: 16px; }
-    .tab-bar button { flex: 1; border: none; background: transparent; color: var(--muted); padding: 8px; border-radius: 6px; cursor: pointer; font-size: 14px; }
-    .tab-bar button.active { background: var(--accent); color: #fff; }
-    .tab-pane { display: none; }
-    .tab-pane.active { display: block; }
-  </style>
 </head>
 <body>
   <div class="topbar">
     <div class="brand">GImage · 管理后台</div>
     <div class="right">
       <a href="/app.html">工作台</a>
-      <a href="/gallery.html">图集</a>
+      <a href="/gallery.html">资产库</a>
       <button class="ghost" id="logoutBtn">退出</button>
     </div>
   </div>
@@ -37,7 +21,7 @@
     <div class="tab-bar">
       <button class="active" data-tab="overview">概览</button>
       <button data-tab="accounts">账户管理</button>
-      <button data-tab="records">会话与图片</button>
+      <button data-tab="records">会话与内容</button>
     </div>
 
     <!-- Tab: 概览 -->
@@ -52,7 +36,8 @@
       </div>
       <div class="card" style="margin-top:16px">
         <h3 style="margin-top:0">今日用量(<span id="usageDate"></span>)</h3>
-        <p class="muted">总生成 <b id="totalImages">-</b> 张 · 估算成本 ≈ $<b id="estCost">-</b>(<span id="costNote"></span>)</p>
+        <p class="muted">总生成 <b id="totalCount">-</b> 次 · 总花费 ≈ $<b id="totalSpent">-</b></p>
+        <div class="stat-grid" id="modalityStats"></div>
       </div>
     </div>
 
@@ -80,7 +65,7 @@
       </div>
     </div>
 
-    <!-- Tab: 会话与图片 -->
+    <!-- Tab: 会话与内容 -->
     <div class="tab-pane" id="tab-records">
       <div class="card">
         <div class="row" style="gap:12px; align-items:flex-end; margin-bottom:12px">
@@ -95,6 +80,6 @@
     </div>
   </div>
 
-  <script src="/admin.js"></script>
+  <script type="module" src="/admin.js"></script>
 </body>
 </html>

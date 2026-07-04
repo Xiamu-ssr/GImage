@@ -2,9 +2,11 @@
 // Gemini 协议多轮:发送完整 contents 历史(user+model 多轮)。
 import path from 'path';
 import { readJSON, ROOT } from './store.js';
+import { truncate, friendlyError } from './httpUtil.js';
 
 const OPENAI_BASE = (process.env.ZENMUX_OPENAI_BASE || 'https://zenmux.ai/api/v1').replace(/\/$/, '');
 const GEMINI_BASE = (process.env.ZENMUX_GEMINI_BASE || 'https://zenmux.ai/api/vertex-ai/v1').replace(/\/$/, '');
+const VIDEO_BASE = (process.env.ZENMUX_VIDEO_BASE || OPENAI_BASE).replace(/\/$/, '');
 const API_KEY = process.env.ZENMUX_API_KEY || '';
 
 let _modelsCache = null;
@@ -207,24 +209,77 @@ async function generateViaOpenAIImages(modelId, prompt, inputImages, params) {
   throw new Error(`响应未包含图片: ${truncate(JSON.stringify(json))}`);
 }
 
-function truncate(s, n = 500) {
-  s = String(s);
-  return s.length > n ? s.slice(0, n) + '…' : s;
+// ---------- 视频任务(zenmux videos 任务接口:提交 → 轮询) ----------
+// 注:zenmux 视频接口未公开完整文档,以下按 OpenAI 风格任务资源假设实现,
+// 字段名(status/url 等)接入真实环境后如有出入需相应调整。
+export async function submitJob({ model, prompt, inputImages = [], params = {} }) {
+  if (!API_KEY) throw new Error('服务器未配置 ZENMUX_API_KEY');
+  const m = await getModel(model);
+  if (!m) throw new Error(`未知模型: ${model}`);
+  if (!prompt || !prompt.trim()) throw new Error('提示词不能为空');
+  if (m.protocol === 'zenmux-video') return submitVideoJob(m.id, prompt, inputImages, params);
+  throw new Error(`不支持的异步协议: ${m.protocol}`);
 }
 
-function friendlyError(status, raw) {
-  try {
-    const json = JSON.parse(raw);
-    const msg = json?.error?.message || json?.message || '';
-    if (msg.includes('safety') || msg.includes('rejected'))
-      return '提示词触发了安全审核,请调整内容后重试';
-    if (msg.includes('quota') || msg.includes('rate'))
-      return '服务器请求频率超限或配额不足,请稍后重试';
-    if (msg.includes('permission') || msg.includes('auth') || status === 401 || status === 403)
-      return 'API Key 无效或无权限,请联系管理员';
-    if (msg) return msg;
-  } catch { /* not JSON */ }
-  if (String(raw).startsWith('<!DOCTYPE') || String(raw).startsWith('<html'))
-    return '请检查 API Key 是否有效(服务端返回了网页而非 API 响应)';
-  return `生图失败 (${status})`;
+export async function checkJob({ model, providerJobId, providerSurface }) {
+  const m = await getModel(model);
+  if (!m) throw new Error(`未知模型: ${model}`);
+  if (m.protocol === 'zenmux-video') return checkVideoJob(providerJobId, providerSurface);
+  throw new Error(`不支持的异步协议: ${m.protocol}`);
+}
+
+async function submitVideoJob(modelId, prompt, inputImages, params) {
+  // 豆包 Seedance 走火山方舟风格的 content 数组(而非纯 prompt 字符串);实测 zenmux 会校验 content 是否存在。
+  const content = [{ type: 'text', text: prompt }];
+  for (const img of inputImages) {
+    content.push({ type: 'image_url', image_url: { url: `data:${img.mimeType};base64,${img.base64}` }, role: 'reference_image' });
+  }
+  const body = { model: modelId, prompt, content };
+  if (params.duration) body.duration = Number(params.duration);
+  if (params.resolution) body.resolution = params.resolution;
+  if (params.aspectRatio) { body.ratio = params.aspectRatio; body.aspect_ratio = params.aspectRatio; }
+  if (inputImages.length > 0) {
+    body.reference_images = inputImages.map((img) => `data:${img.mimeType};base64,${img.base64}`);
+  }
+
+  const resp = await fetch(`${VIDEO_BASE}/videos`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const text = await resp.text();
+  if (!resp.ok) throw new Error(friendlyError(resp.status, text));
+
+  let json;
+  try { json = JSON.parse(text); } catch { throw new Error(`返回非 JSON: ${truncate(text)}`); }
+  const jobId = json?.id || json?.task_id;
+  if (!jobId) throw new Error(`响应未包含任务 ID: ${truncate(text)}`);
+  return { providerJobId: jobId, providerSurface: 'videos' };
+}
+
+async function checkVideoJob(providerJobId, providerSurface) {
+  const surface = providerSurface || 'videos';
+  const resp = await fetch(`${VIDEO_BASE}/${surface}/${providerJobId}`, {
+    headers: { Authorization: `Bearer ${API_KEY}` },
+  });
+  const text = await resp.text();
+  if (!resp.ok) throw new Error(friendlyError(resp.status, text));
+
+  let json;
+  try { json = JSON.parse(text); } catch { throw new Error(`返回非 JSON: ${truncate(text)}`); }
+
+  const status = json?.status;
+  if (status === 'failed' || status === 'error') {
+    return { status: 'failed', error: json?.error?.message || json?.error || '视频生成失败' };
+  }
+  if (status !== 'completed' && status !== 'succeeded' && status !== 'done') {
+    return { status: 'processing' };
+  }
+
+  const url = json?.content?.video_url || json?.video_url || json?.url || json?.video?.url || json?.output?.url;
+  if (!url) return { status: 'failed', error: '生成完成但响应未包含视频地址' };
+  const videoResp = await fetch(url);
+  if (!videoResp.ok) throw new Error(`拉取视频失败 (${videoResp.status})`);
+  const buffer = Buffer.from(await videoResp.arrayBuffer());
+  return { status: 'done', buffer, mimeType: videoResp.headers.get('content-type') || 'video/mp4' };
 }
