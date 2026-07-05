@@ -11,7 +11,9 @@ const selected = new Set();
 const pollingIds = new Set();
 
 async function init() {
-  await loadMe();
+  const me = await loadMe();
+  $('whoAvatar').textContent = me.user.username.slice(0, 1).toUpperCase();
+  $('whoAvatar').title = me.user.username;
   wireLogout();
   allAssets = await apiJson('/api/assets');
   render();
@@ -26,12 +28,20 @@ function applyFilters() {
   return items;
 }
 
+function dateHeading(s) {
+  if (!s) return '-';
+  const d = new Date(s);
+  const now = new Date();
+  const label = `${d.getMonth() + 1}月${d.getDate()}日`;
+  return d.getFullYear() === now.getFullYear() ? label : `${d.getFullYear()}年${label}`;
+}
+
 function groupByDate(items) {
   const groups = new Map();
   for (const item of items) {
     const key = fmtDate(item.createdAt);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(item);
+    if (!groups.has(key)) groups.set(key, { label: dateHeading(item.createdAt), items: [] });
+    groups.get(key).items.push(item);
   }
   return groups;
 }
@@ -73,15 +83,15 @@ function render() {
   gallery.classList.toggle('batch-mode', batchMode);
 
   if (!items.length) {
-    gallery.innerHTML = `<span class="muted" style="padding:40px">${allAssets.length ? '没有匹配的内容' : '还没有生成过内容,去<a href="/app.html">工作台</a>试试'}</span>`;
+    gallery.innerHTML = `<div class="gallery-empty muted">${allAssets.length ? '没有匹配的内容' : '还没有生成过内容,去<a href="/app.html">工作台</a>试试'}</div>`;
     updateBatchBar();
     return;
   }
 
   const groups = groupByDate(items);
   let html = '';
-  for (const [date, group] of groups) {
-    if (groups.size > 1) html += `<div class="date-sep">${date} · ${group.length} 项</div>`;
+  for (const { label, items: group } of groups.values()) {
+    html += `<div class="date-sep"><span class="d-date">${label}</span><span class="d-count">${group.length} 项</span></div>`;
     for (const item of group) html += cardHTML(item);
   }
   gallery.innerHTML = html;

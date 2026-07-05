@@ -23,6 +23,8 @@ const MODE_TITLE = { image: '图片生成', video: '视频生成', music: '音�
 async function init() {
   const me = await loadMe();
   $('who').textContent = me.user.username;
+  $('whoAvatar').textContent = me.user.username.slice(0, 1).toUpperCase();
+  $('whoAvatar').title = me.user.username;
   $('remaining').textContent = `$${me.remaining}`;
   $('quota').textContent = `$${me.dailyBudget}`;
 
@@ -377,18 +379,35 @@ function showError(msg) {
 }
 
 // ---- Welcome / quick prompts ----
+const FEATURE_CARDS = [
+  { fc: 'image', ico: '🖼️', title: '图片生成', sub: '文本 / 参考图生图' },
+  { fc: 'video', ico: '🎬', title: '视频生成', sub: '首帧驱动,智能运镜' },
+  { fc: 'music', ico: '🎵', title: '音乐生成', sub: '风格描述,一键成曲' },
+  { fc: 'gallery', ico: '📁', title: '资产库', sub: '查看全部生成历史' },
+];
+
 function renderWelcome() {
   const prompts = QUICK_PROMPTS[currentModality] || [];
   $('chatBody').innerHTML = `<div class="welcome">
     <h2>GImage · ${MODE_TITLE[currentModality]}</h2>
     <p>选择模型,输入提示词,开始创作</p>
     <div class="quick-cards">${prompts.map((p) => `<button class="quick-card" data-prompt="${esc(p)}">${esc(p)}</button>`).join('')}</div>
+    <div class="feature-grid">${FEATURE_CARDS.map((f) => `
+      <div class="feature-card" data-fc="${f.fc}">
+        <div class="f-ico">${f.ico}</div>
+        <div><div class="f-title">${f.title}</div><div class="f-sub">${f.sub}</div></div>
+      </div>`).join('')}</div>
   </div>`;
 }
 on($('chatBody'), 'click', '.quick-card', (e, el) => {
   $('prompt').value = el.dataset.prompt;
   $('prompt').dispatchEvent(new Event('input'));
   $('prompt').focus();
+});
+on($('chatBody'), 'click', '.feature-card', (e, el) => {
+  const fc = el.dataset.fc;
+  if (fc === 'gallery') { location.href = '/gallery.html'; return; }
+  switchModality(fc);
 });
 
 // ---- Sessions sidebar ----

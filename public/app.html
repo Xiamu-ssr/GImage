@@ -8,7 +8,21 @@
 </head>
 <body>
   <div class="chat-wrap">
-    <!-- 侧边栏 -->
+    <!-- 图标导航栏 -->
+    <nav class="icon-rail">
+      <div class="rail-logo">G</div>
+      <div class="rail-nav">
+        <div class="rail-item active" title="生成"><span class="ico">✦</span>生成</div>
+        <a class="rail-item" href="/gallery.html" title="资产库"><span class="ico">🖼️</span>资产</a>
+        <a class="rail-item" id="adminLink" href="/admin.html" title="管理" style="display:none"><span class="ico">⚙️</span>管理</a>
+      </div>
+      <div class="rail-foot">
+        <div class="rail-avatar" id="whoAvatar" title=""></div>
+        <button class="icon-btn" id="logoutBtn" title="退出">⏻</button>
+      </div>
+    </nav>
+
+    <!-- 侧边栏:会话历史 -->
     <aside class="sidebar" id="sidebar">
       <div class="s-head">
         <span class="brand">GImage</span>
@@ -19,14 +33,7 @@
       </div>
       <div class="s-list" id="sessionList"></div>
       <div class="s-foot">
-        <div class="s-nav">
-          <a href="/gallery.html">资产库</a>
-          <a id="adminLink" href="/admin.html" style="display:none">管理</a>
-        </div>
-        <div class="row" style="justify-content:space-between">
-          <span class="muted" id="who" style="font-size:12px"></span>
-          <button class="ghost sm" id="logoutBtn">退出</button>
-        </div>
+        <span class="muted" id="who" style="font-size:12px"></span>
       </div>
     </aside>
 
