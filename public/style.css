@@ -203,6 +203,17 @@ th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: upp
 }
 .quick-cards .quick-card:hover { background: var(--panel-2); color: var(--text); border-color: var(--border-light); transform: none; }
 
+.recent-row { margin-top: 32px; text-align: left; }
+.recent-title { font-size: 13px; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+.recent-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.recent-item {
+  aspect-ratio: 1; border-radius: var(--radius-sm); overflow: hidden; cursor: pointer;
+  background: var(--panel-2); box-shadow: var(--shadow-sm); transition: transform .15s;
+}
+.recent-item:hover { transform: scale(1.05); }
+.recent-item img, .recent-item video { width: 100%; height: 100%; object-fit: cover; display: block; }
+@media (max-width: 640px) { .recent-grid { grid-template-columns: repeat(3, 1fr); } }
+
 @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 
 /* typing indicator */

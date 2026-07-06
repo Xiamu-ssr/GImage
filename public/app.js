@@ -30,8 +30,8 @@ async function init() {
   $('quota').textContent = `$${me.dailyBudget}`;
 
   models = await apiJson('/api/models');
-  switchModality('image');
   await loadSessions();
+  switchModality('image');
 }
 
 // ---- Modality ----
@@ -395,9 +395,22 @@ function showError(msg) {
 // ---- Welcome / quick prompts ----
 function renderWelcome() {
   const prompts = QUICK_PROMPTS[currentModality] || [];
+  // 音乐没有可展示的画面,只在图片/视频模式下用真实历史生成内容填充「最近创作」
+  const recents = currentModality === 'music' ? [] :
+    history.filter((h) => h.modality === currentModality && h.status === 'done').slice(0, 6);
+  const recentHTML = recents.length ? `
+    <div class="recent-row">
+      <div class="recent-title">最近创作</div>
+      <div class="recent-grid">${recents.map((r) => `<div class="recent-item">${
+        r.modality === 'video'
+          ? `<video src="${r.assetUrl}" data-lightbox="video" muted loop autoplay playsinline></video>`
+          : `<img src="${r.assetUrl}" data-lightbox="image" loading="lazy" />`
+      }</div>`).join('')}</div>
+    </div>` : '';
   $('chatBody').innerHTML = `<div class="welcome">
     <h2>你好,想创作什么?</h2>
     <div class="quick-cards">${prompts.map((p) => `<button class="quick-card" data-prompt="${esc(p)}">${esc(p)}</button>`).join('')}</div>
+    ${recentHTML}
   </div>`;
 }
 on($('chatBody'), 'click', '.quick-card', (e, el) => {
