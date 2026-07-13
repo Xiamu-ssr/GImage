@@ -126,7 +126,8 @@ app.use(session({
   secret: SESSION_SECRET || 'dev-secret-change-me',
   resave: false,
   saveUninitialized: false,
-  cookie: { httpOnly: true, secure: IS_PRODUCTION, maxAge: 7 * 24 * 3600 * 1000, sameSite: 'strict' },
+  // 仅在反向代理确实提供 HTTPS 时标记 Secure；裸 HTTP 的 Cookie 会被浏览器直接丢弃。
+  cookie: { httpOnly: true, secure: HTTPS_HARDENING, maxAge: 7 * 24 * 3600 * 1000, sameSite: 'strict' },
 }));
 
 function publicError(err, fallback = '服务暂时不可用，请稍后再试') {
