@@ -12,7 +12,7 @@ timestamp: 2026-07-13
 
 1. 配置 `.env`，特别是随机 32 位以上的 `SESSION_SECRET`、管理员初始账号和上游密钥。
 2. 执行 `npm ci && npm run build`；构建必须通过类型检查。
-3. 以 `NODE_ENV=production npm start` 启动，或构建 Docker 镜像并持久挂载 `/app/data`。
+3. 以 `NODE_ENV=production npm start` 启动，或构建 Docker 镜像并持久挂载 `/app/data`。HTTPS 已在反向代理终止时设 `HTTPS_HARDENING=true`；纯 HTTP 临时部署保持 `false`，否则静态资源会被浏览器错误升级为 HTTPS。
 4. 检查 `GET /healthz` 返回 `{ "ok": true }`。
 
 ## 备份

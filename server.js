@@ -36,6 +36,9 @@ const PORT = process.env.PORT || 3000;
 const FileStore = FileStoreFactory(session);
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const SESSION_SECRET = process.env.SESSION_SECRET;
+// HTTPS 由反向代理终止时显式开启；裸 HTTP 部署不能下发 upgrade-insecure-requests，
+// 否则浏览器会把同源静态资源升级到不存在的 https:// 地址。
+const HTTPS_HARDENING = process.env.HTTPS_HARDENING === 'true';
 const CLIENT_DIR = path.join(__dirname, 'dist');
 
 if (IS_PRODUCTION && (!SESSION_SECRET || SESSION_SECRET === 'dev-secret-change-me' || SESSION_SECRET.length < 32)) {
@@ -46,6 +49,8 @@ const app = express();
 app.disable('x-powered-by');
 if (IS_PRODUCTION) app.set('trust proxy', 1);
 app.use(helmet({
+  crossOriginOpenerPolicy: HTTPS_HARDENING ? { policy: 'same-origin' } : false,
+  strictTransportSecurity: HTTPS_HARDENING ? { maxAge: 15552000, includeSubDomains: true } : false,
   contentSecurityPolicy: {
     useDefaults: true,
     directives: {
@@ -55,6 +60,7 @@ app.use(helmet({
       'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://fonts.cdnfonts.com'],
       'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com', 'https://fonts.cdnfonts.com'],
       'script-src': ["'self'"],
+      upgradeInsecureRequests: HTTPS_HARDENING ? [] : null,
     },
   },
   crossOriginEmbedderPolicy: false,
