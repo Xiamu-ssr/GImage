@@ -161,3 +161,90 @@ textarea { resize: vertical; }
 /* Atelier refinement: fewer micro-labels, larger reading rhythm, and a real model picker. */
 .atelier-header h1 { margin: 0; }.atelier-mode { min-width: 104px; min-height: 44px; justify-content: center; }.atelier-mode b { font-size: 13px; }.atelier-brief h2 { margin-top: 0; }.atelier-brief p { margin-top: 7px; color: #aaa69b; font-size: 13px; }.atelier-model-menu { position: relative; z-index: 3; min-width: min(260px, 42vw); }.atelier-model-trigger { width: 100%; min-height: 58px; display: grid; grid-template-columns: minmax(0,1fr) 18px; gap: 4px 8px; align-items: center; padding: 10px 11px; color: #e9e4d8; border: 1px solid rgba(218,202,166,.28); border-radius: 10px; background: linear-gradient(135deg, rgba(223,205,164,.1), rgba(255,255,255,.025)); text-align: left; transition: .18s ease; }.atelier-model-trigger:hover, .atelier-model-trigger[aria-expanded="true"] { border-color: rgba(231,215,180,.62); background: rgba(220,201,158,.13); }.atelier-model-trigger span { grid-column: 1 / -1; color: #989387; font-size: 10px; }.atelier-model-trigger b { overflow: hidden; font-size: 12px; font-weight: 620; text-overflow: ellipsis; white-space: nowrap; }.atelier-model-trigger svg { color: #d2c094; }.atelier-model-options { position: absolute; top: calc(100% + 7px); right: 0; left: 0; overflow: hidden; padding: 5px; border: 1px solid rgba(230,215,182,.25); border-radius: 10px; background: #20201d; box-shadow: 0 18px 45px rgba(0,0,0,.38); }.atelier-model-options button { width: 100%; display: grid; gap: 3px; padding: 10px; color: #b6b1a6; border-radius: 7px; background: transparent; text-align: left; }.atelier-model-options button:hover, .atelier-model-options button.is-selected { color: #f4f0e5; background: rgba(220,202,161,.13); }.atelier-model-options b { font-size: 12px; font-weight: 590; }.atelier-model-options span { overflow: hidden; color: #89857b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }.atelier-model-note { margin-top: 14px; font-size: 11px; }.atelier-suggestions { gap: 8px; margin-top: 16px; }.atelier-suggestions button { padding: 7px 10px; font-size: 11px; }.atelier-material-head span { font-size: 14px; }.atelier-card-title, .atelier-toggle, .atelier-control select { font-size: 12px; }.atelier-card-title small, .atelier-control > span, .atelier-lyrics, .atelier-audio-drop small, .atelier-audio-file small { font-size: 10px; }.atelier-submit-row span { font-size: 11px; }.atelier-output-head h2 { margin: 0; font-size: 19px; }.atelier-output-card p, .atelier-output-card a { font-size: 11px; }.atelier-session b { font-size: 12px; }.atelier-session small { font-size: 10px; }
 @media (max-width: 720px) { .atelier-model-menu { width: 100%; margin-top: 17px; }.atelier-model-trigger { min-height: 54px; }.atelier-brief-head { display: block; } }
+
+/* Studio art direction: one graphite material, with the interface receding behind the work. */
+.app-frame { background: #10100f; }
+.app-sidebar { background: rgba(14,14,14,.94); border-color: rgba(255,255,255,.09); }
+.brand-mark { color: #141412; background: linear-gradient(145deg, #f4f1e9, #b8b4a9 58%, #77736c); box-shadow: 0 9px 24px rgba(0,0,0,.27); }
+.nav-link { color: #aaa8a1; }
+.nav-link:hover { color: #f0eee8; background: rgba(255,255,255,.045); }
+.nav-link.is-active { color: #f5f3ed; background: linear-gradient(100deg, rgba(237,232,220,.13), rgba(255,255,255,.025)); box-shadow: inset 0 0 0 1px rgba(237,232,220,.14); }
+.nav-link.is-active svg { color: #e4dfd4; }
+.avatar { color: #171714; background: linear-gradient(145deg, #f0ece3, #aaa69c); box-shadow: 0 5px 16px rgba(0,0,0,.25); }
+.sidebar-footer { border-color: rgba(255,255,255,.09); }
+
+.atelier-page {
+  color: #efede8;
+  background:
+    radial-gradient(760px 390px at 56% -14%, rgba(225,219,205,.055), transparent 68%),
+    #121211;
+}
+.atelier-header {
+  min-height: 132px;
+  background: linear-gradient(180deg, rgba(255,255,255,.017), rgba(255,255,255,0));
+  border-color: rgba(255,255,255,.09);
+}
+.atelier-header h1 { color: #f3f1ec; font-weight: 510; }
+.atelier-credit span, .atelier-credit small { color: #8e8c86; font-size: 11px; }
+.atelier-credit b { color: #f0ede6; }
+.atelier-layout { grid-template-columns: 218px minmax(430px, 1fr) minmax(302px, 350px); }
+.atelier-rail, .atelier-output { background: rgba(17,17,16,.82); border-color: rgba(255,255,255,.09); }
+.atelier-workspace { background: rgba(19,19,18,.46); }
+.atelier-rail { padding: 18px 13px 17px; }
+.atelier-new {
+  min-height: 43px;
+  color: #eeebe3;
+  border-color: rgba(237,232,220,.2);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+}
+.atelier-new:hover { border-color: rgba(244,240,232,.48); background: rgba(255,255,255,.075); }
+.atelier-session { padding: 10px 8px; color: #a8a69f; }
+.atelier-session:hover { background: rgba(255,255,255,.045); }
+.atelier-session.is-active { color: #f5f2ea; background: rgba(255,255,255,.075); box-shadow: inset 2px 0 #ded9ce, inset 0 0 0 1px rgba(255,255,255,.08); }
+.atelier-session > span { color: #d5d0c5; background: rgba(255,255,255,.055); }
+.atelier-session b { font-size: 12px; }.atelier-session small { color: #8b8880; font-size: 10px; }
+.atelier-rail-empty { color: #949189; font-size: 12px; }.atelier-rail-empty svg { color: #d0cbc0; }
+
+.atelier-workspace { padding-top: clamp(25px, 3vw, 48px); }
+.atelier-mode-row { gap: 7px; margin-bottom: 34px; }
+.atelier-mode { min-width: 112px; min-height: 46px; color: #aaa79f; border-radius: 12px; }
+.atelier-mode:hover { color: #ece9e2; background: rgba(255,255,255,.04); }
+.atelier-mode.is-active { color: #f4f1eb; border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.075); box-shadow: 0 8px 22px rgba(0,0,0,.11); }
+.atelier-mode svg { color: inherit; }.atelier-mode b { font-size: 13px; }
+.atelier-brief, .atelier-materials { border-color: rgba(255,255,255,.09); }
+.atelier-brief h2 { color: #f2f0eb; }
+.atelier-brief p { color: #aaa79f; font-size: 14px; }
+.atelier-model-trigger {
+  min-height: 62px;
+  padding: 11px 13px;
+  color: #f0eee8;
+  border-color: rgba(255,255,255,.16);
+  border-radius: 13px;
+  background: rgba(255,255,255,.05);
+}
+.atelier-model-trigger:hover, .atelier-model-trigger[aria-expanded="true"] { border-color: rgba(255,255,255,.36); background: rgba(255,255,255,.085); }
+.atelier-model-trigger span { color: #97948c; font-size: 11px; }.atelier-model-trigger b { font-size: 13px; }.atelier-model-trigger svg { color: #c8c3b8; }
+.atelier-model-options { border-color: rgba(255,255,255,.16); border-radius: 13px; background: #1b1b19; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+.atelier-model-options button { padding: 11px; }.atelier-model-options button:hover, .atelier-model-options button.is-selected { background: rgba(255,255,255,.08); }
+.atelier-model-options b { font-size: 13px; }.atelier-model-options span { color: #98948b; font-size: 11px; }
+.atelier-model-note { margin-top: 17px; padding: 10px 12px; color: #b8b4ab; border-left-color: #d8d3c8; background: linear-gradient(90deg, rgba(255,255,255,.065), transparent); font-size: 12px; }
+.atelier-model-note svg { color: #dad5ca; }
+.atelier-prompt { min-height: 178px; color: #f0eee8; }.atelier-prompt::placeholder { color: #75726b; }
+.atelier-suggestions { gap: 8px; }.atelier-suggestions button { color: #b1aea6; border-color: rgba(255,255,255,.11); background: rgba(255,255,255,.028); font-size: 11px; }.atelier-suggestions button:hover { color: #f1eee8; border-color: rgba(255,255,255,.27); background: rgba(255,255,255,.06); }
+.atelier-material-head span { color: #e2dfd7; font-size: 14px; }.atelier-material-head > svg { color: #b8b4aa; }
+.atelier-material-card, .atelier-control, .atelier-toggle { border-color: rgba(255,255,255,.1); border-radius: 12px; background: rgba(255,255,255,.035); }
+.atelier-card-title { font-size: 12px; }.atelier-card-title svg { color: #d6d1c6; }.atelier-card-title small { color: #929087; font-size: 10px; }
+.atelier-control > span { color: #969289; font-size: 10px; }.atelier-control select { color: #eeece6; font-size: 12px; }.atelier-control svg { color: #c4c0b7; }
+.atelier-toggle { color: #d5d1c8; font-size: 12px; }.atelier-toggle i { background: #4f4e49; }.atelier-toggle input:checked + span + i { background: #d6d0c4; }.atelier-toggle input:checked + span + i::after { background: #1b1a18; }
+.atelier-submit-row { padding-top: 21px; }.atelier-submit-row span { color: #b9b5ac; font-size: 12px; }
+.atelier-generate { min-height: 46px; padding: 0 19px 0 21px; color: #161614; background: #f0eee8; font-size: 13px; }.atelier-generate:not(:disabled):hover { background: #fffdf8; }
+
+.atelier-output { padding: 27px 19px 25px; }
+.atelier-output-head { padding: 0 5px 20px; border-color: rgba(255,255,255,.09); }.atelier-output-head h2 { color: #efede7; font-size: 19px; }.atelier-output-head > span { color: #b7b2a8; border-color: rgba(255,255,255,.14); }
+.atelier-output-list { padding: 21px 5px 0; }.atelier-output-card { border-color: rgba(255,255,255,.1); border-radius: 13px; background: rgba(255,255,255,.035); }.atelier-output-meta { padding: 10px 11px; color: #aaa69d; font-size: 11px; }
+.atelier-output-card p { color: #b9b5ad; font-size: 12px; }.atelier-output-card a { color: #e0dbd0; font-size: 11px; }
+.atelier-output-empty { min-height: 300px; color: #96938b; font-size: 12px; }.atelier-output-empty > span { width: 48px; height: 48px; color: #d9d4c8; border-color: rgba(255,255,255,.17); }.atelier-output-empty h3 { color: #dedad1; font-size: 15px; }.atelier-output-empty p { font-size: 12px; }
+
+@media (max-width: 1210px) { .atelier-layout { grid-template-columns: 202px minmax(400px, 1fr) 290px; } }
+@media (max-width: 720px) { .atelier-rail, .atelier-output, .atelier-workspace { background: transparent; }.atelier-mode { min-width: 108px; } }

@@ -2,6 +2,8 @@
 
 私有部署的多媒体 AI 创作工作台：图片、视频、音乐、团队账户、每日额度与作品资产。React + TypeScript + Vite + Tailwind + GSAP；所有状态与媒体固定保存在本机 `data/`，不依赖数据库。
 
+![GImage 创作工作台](docs/studio-workbench.png)
+
 ## 启动
 
 ```bash
