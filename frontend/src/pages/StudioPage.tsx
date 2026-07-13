@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useOutletContext } from 'react-router-dom';
 import {
-  ArrowUpRight, Check, ChevronDown, Clock3, ImagePlus, Layers3, Library,
+  ArrowUpRight, Check, ChevronDown, ImagePlus, Layers3, Library,
   LoaderCircle, Music2, Plus, Send, SlidersHorizontal, Sparkles, Upload, Video, Wand2, X,
 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -13,10 +13,10 @@ import { Modal } from '../components/Modal';
 
 type Reference = { id: string; kind: 'file'; file: File } | { id: string; kind: 'asset'; asset: Asset };
 
-const modes: Array<{ id: Modality; title: string; eyebrow: string; description: string; icon: typeof Sparkles }> = [
-  { id: 'image', title: '静帧', eyebrow: 'IMAGE', description: '把一个构图、一束光或一次重写变得可见。', icon: ImagePlus },
-  { id: 'video', title: '动态', eyebrow: 'MOTION', description: '描述画面如何呼吸、移动与停留。', icon: Video },
-  { id: 'music', title: '声场', eyebrow: 'MUSIC', description: '从情绪、歌词与参考旋律开始编排。', icon: Music2 },
+const modes: Array<{ id: Modality; title: string; description: string; icon: typeof Sparkles }> = [
+  { id: 'image', title: '静帧', description: '把一个构图、一束光或一次重写变得可见。', icon: ImagePlus },
+  { id: 'video', title: '动态', description: '描述画面如何呼吸、移动与停留。', icon: Video },
+  { id: 'music', title: '声场', description: '从情绪、歌词与参考旋律开始编排。', icon: Music2 },
 ];
 
 const quickPrompts: Record<Modality, string[]> = {
@@ -45,6 +45,7 @@ export function StudioPage() {
   const [assetPicker, setAssetPicker] = useState(false);
   const [lightbox, setLightbox] = useState<Asset | null>(null);
   const [notice, setNotice] = useState('');
+  const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   const modelsQuery = useQuery({ queryKey: ['models'], queryFn: () => api<Model[]>('/api/models') });
   const historyQuery = useQuery({
@@ -67,6 +68,7 @@ export function StudioPage() {
     setReferences([]);
     setReferenceAudio(null);
     setCoverFeatureId(null);
+    setModelPickerOpen(false);
   // Switching modality intentionally resets model-specific state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modality, modelsQuery.data]);
@@ -146,19 +148,18 @@ export function StudioPage() {
   };
   const changeModel = (nextId: string) => {
     const next = models.find((model) => model.id === nextId);
-    setModelId(nextId); setParams(defaults(next)); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null);
+    setModelId(nextId); setParams(defaults(next)); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null); setModelPickerOpen(false);
   };
 
   return <div className="atelier-page">
     <header className="atelier-header">
-      <div><span className="eyebrow">CREATIVE ATELIER</span><h1>{sessionId ? '沿着这条创作线，继续。' : '把一个感觉，做成作品。'}</h1></div>
+      <div><h1>{sessionId ? '沿着这条创作线，继续。' : '把一个感觉，做成作品。'}</h1></div>
       <div className="atelier-credit"><span>今日可用</span><b>{money(me.remaining)}</b><small>预算 {money(me.dailyBudget)}</small></div>
     </header>
 
     <div className="atelier-layout">
       <aside className="atelier-rail">
         <button className="atelier-new" onClick={resetDraft}><Plus size={17} />新建一条创作线</button>
-        <div className="atelier-rail-label"><Clock3 size={13} /> RECENT THREADS</div>
         <div className="atelier-session-list">
           {sessions.map((session) => {
             const first = session.items[0];
@@ -170,23 +171,22 @@ export function StudioPage() {
           })}
           {!sessions.length && <div className="atelier-rail-empty"><Library size={21} /><span>作品会按创作线留在这里。</span></div>}
         </div>
-        <p className="atelier-rail-note">每一次提交都会连同模型、素材与版本留在本机资产库。</p>
       </aside>
 
       <main className="atelier-workspace">
         <div className="atelier-mode-row" role="tablist" aria-label="创作类型">
-          {modes.map((mode) => { const Icon = mode.icon; return <button key={mode.id} type="button" role="tab" aria-selected={mode.id === modality} className={`atelier-mode${mode.id === modality ? ' is-active' : ''}`} onClick={() => setModality(mode.id)}><Icon size={18} /><span><small>{mode.eyebrow}</small><b>{mode.title}</b></span></button>; })}
+          {modes.map((mode) => { const Icon = mode.icon; return <button key={mode.id} type="button" role="tab" aria-selected={mode.id === modality} className={`atelier-mode${mode.id === modality ? ' is-active' : ''}`} onClick={() => setModality(mode.id)}><Icon size={18} /><span><b>{mode.title}</b></span></button>; })}
         </div>
 
         <section className="atelier-brief">
-          <div className="atelier-brief-head"><div><span>{selectedMode.eyebrow} / {sessionId ? 'IN PROGRESS' : 'NEW STUDY'}</span><h2>{selectedMode.title}</h2><p>{selectedMode.description}</p></div><label className="atelier-model-select"><span>MODEL</span><select value={selectedModel?.id || ''} onChange={(event) => changeModel(event.target.value)}><option value="" disabled>选择模型</option>{modalityModels.map((model) => <option value={model.id} key={model.id}>{model.label}</option>)}</select><ChevronDown size={15} /></label></div>
-          {selectedModel?.note && <div className="atelier-model-note"><Sparkles size={14} /><span>{selectedModel.note}</span><small>{money(selectedModel.costUSD)} / 次</small></div>}
+          <div className="atelier-brief-head"><div><h2>{selectedMode.title}</h2><p>{selectedMode.description}</p></div><div className="atelier-model-menu"><button type="button" className="atelier-model-trigger" aria-haspopup="listbox" aria-expanded={modelPickerOpen} onClick={() => setModelPickerOpen((current) => !current)}><span>模型</span><b>{selectedModel?.label || '选择模型'}</b><ChevronDown size={16} /></button>{modelPickerOpen && <div className="atelier-model-options" role="listbox">{modalityModels.map((model) => <button type="button" key={model.id} role="option" aria-selected={model.id === selectedModel?.id} className={model.id === selectedModel?.id ? 'is-selected' : ''} onClick={() => changeModel(model.id)}><b>{model.label}</b><span>{model.note || money(model.costUSD)}</span></button>)}</div>}</div></div>
+          {selectedModel?.note && <div className="atelier-model-note"><Sparkles size={14} /><span>{selectedModel.note}</span></div>}
           <textarea className="atelier-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} placeholder={modality === 'video' ? '说清楚镜头里的画面、运动、节奏与停顿…' : isCoverModel ? '说明希望保留什么旋律，以及想把唱法、情绪和编配带去哪里…' : modality === 'music' ? '从声音、情绪、场景或一句歌词开始描述…' : '描述构图、材质、光线、情绪，或你想要改写的地方…'} />
-          <div className="atelier-suggestions"><span>灵感引子</span>{quickPrompts[modality].map((item) => <button type="button" key={item} onClick={() => setPrompt(item)}>{item}</button>)}</div>
+          <div className="atelier-suggestions">{quickPrompts[modality].map((item) => <button type="button" key={item} onClick={() => setPrompt(item)}>{item}</button>)}</div>
         </section>
 
         <section className="atelier-materials">
-          <div className="atelier-material-head"><div><span>素材与控制</span><p>只保留会影响这一次创作的选择。</p></div><SlidersHorizontal size={18} /></div>
+          <div className="atelier-material-head"><div><span>创作设置</span></div><SlidersHorizontal size={18} /></div>
           <div className="atelier-material-grid">
             {maxReferences > 0 && <div className="atelier-material-card"><div className="atelier-card-title"><ImagePlus size={16} /><span>视觉参考</span><small>{references.length} / {maxReferences}</small></div><div className="atelier-reference-shelf">{references.map((reference, index) => <div className="atelier-reference" key={reference.id}><img src={previewUrls[index]} alt="待提交参考图" /><button type="button" onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))} aria-label="移除参考图"><X size={13} /></button></div>)}{references.length < maxReferences && <label className="atelier-upload-tile"><Upload size={17} /><span>上传</span><input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ''; }} /></label>}<button type="button" className="atelier-library-tile" onClick={() => setAssetPicker(true)} disabled={references.length >= maxReferences}><Layers3 size={16} /><span>资产库</span></button></div></div>}
             {isCoverModel && <div className="atelier-material-card wide"><div className="atelier-card-title"><Music2 size={16} /><span>旋律参考</span>{coverFeatureId && <small className="is-ready">已解析</small>}</div>{referenceAudio ? <div className="atelier-audio-file"><Music2 size={16} /><div><b>{referenceAudio.name}</b><small>{(referenceAudio.size / 1024 / 1024).toFixed(1)} MB · 6 秒至 6 分钟</small></div>{!coverFeatureId && <button type="button" onClick={() => preprocessCover.mutate()} disabled={preprocessCover.isPending}>{preprocessCover.isPending ? <LoaderCircle className="spin" size={14} /> : <><Wand2 size={14} />解析歌词</>}</button>}<button type="button" className="remove" onClick={() => { setReferenceAudio(null); setCoverFeatureId(null); }} aria-label="移除参考音频"><X size={14} /></button></div> : <label className="atelier-audio-drop"><Music2 size={18} /><span>上传参考音频，保留旋律与节奏</span><small>MP3、WAV、FLAC、AAC、M4A 或 OGG · 最大 50MB</small><input type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/mp4,audio/aac,audio/ogg" hidden onChange={(event) => { setReferenceAudio(event.target.files?.[0] || null); setCoverFeatureId(null); event.currentTarget.value = ''; }} /></label>}</div>}
@@ -195,12 +195,12 @@ export function StudioPage() {
           {Object.entries(selectedModel?.params || {}).filter(([, config]) => config.type === 'textarea').map(([key, config]) => <label className="atelier-lyrics" key={key}><span>{config.label}</span><textarea rows={5} value={String(params[key] || '')} onChange={(event) => setParams((current) => ({ ...current, [key]: event.target.value }))} placeholder={isCoverModel ? '留空时会尝试从参考音频识别歌词；也可以在这里精修字词。' : '可填写歌词，或使用上方的自动写词选项。'} /></label>)}
         </section>
 
-        <div className="atelier-submit-row"><div><span>{selectedModel ? shortModel(selectedModel.id) : '正在读取模型'}</span><small>{isCoverModel ? (referenceAudio ? '旋律参考已就绪' : '请添加旋律参考') : '本次设置将与作品一起归档'}</small></div><button className="atelier-generate" onClick={() => prompt.trim() && generate.mutate()} disabled={generate.isPending || !prompt.trim() || (isCoverModel && !referenceAudio)}>{generate.isPending ? <LoaderCircle className="spin" size={18} /> : <><span>{modality === 'music' ? '生成这一段声音' : modality === 'video' ? '生成动态片段' : '生成视觉作品'}</span><ArrowUpRight size={18} /></>}</button></div>
+        <div className="atelier-submit-row"><div><span>{isCoverModel ? (referenceAudio ? '旋律参考已就绪' : '请添加旋律参考') : selectedModel ? shortModel(selectedModel.id) : '正在读取模型'}</span></div><button className="atelier-generate" onClick={() => prompt.trim() && generate.mutate()} disabled={generate.isPending || !prompt.trim() || (isCoverModel && !referenceAudio)}>{generate.isPending ? <LoaderCircle className="spin" size={18} /> : <><span>{modality === 'music' ? '生成这一段声音' : modality === 'video' ? '生成动态片段' : '生成视觉作品'}</span><ArrowUpRight size={18} /></>}</button></div>
         {(generate.error || notice) && <p className={`atelier-notice${generate.error ? ' error' : ''}`}>{generate.error?.message || notice}</p>}
       </main>
 
       <aside className="atelier-output">
-        <div className="atelier-output-head"><div><span>OUTPUT LINE</span><h2>{sessionId ? '正在成形' : '你的作品会出现在这里'}</h2></div><span>{activeSession.length || '—'}</span></div>
+        <div className="atelier-output-head"><div><h2>{sessionId ? '正在成形' : '你的作品会出现在这里'}</h2></div><span>{activeSession.length || '—'}</span></div>
         <div className="atelier-output-list">{activeSession.map((asset) => <article className="atelier-output-card" key={asset.id}><div className="atelier-output-meta"><span>{shortModel(asset.model)}</span><span className={`atelier-status ${asset.status}`}>{statusLabel[asset.status]}</span></div><MediaPreview asset={asset} onOpen={() => setLightbox(asset)} /><p>{asset.prompt}</p>{asset.status === 'done' && <a href={asset.downloadUrl} download>下载原文件 <ArrowUpRight size={13} /></a>}</article>)}{!activeSession.length && <div className="atelier-output-empty"><span><Sparkles size={22} /></span><h3>留一处空白。</h3><p>选好模型，写下方向，作品会沿着这条线出现。</p></div>}</div>
       </aside>
     </div>

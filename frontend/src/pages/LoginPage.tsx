@@ -28,7 +28,7 @@ export function LoginPage() {
 
   if (queryClient.getQueryData(['me'])) return <Navigate to="/studio" replace />;
   return <main className="min-h-screen overflow-x-hidden bg-black text-white" style={{ fontFamily: "'Inter', sans-serif" }}>
-    <CinematicBackdrop dimmed />
+    <CinematicBackdrop dimmed muted />
     <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between px-5 py-6 sm:px-10 sm:py-8"><Link to="/" className="text-[17px] font-semibold tracking-tight">GImage<sup className="ml-0.5 text-[8px] font-medium">AI</sup></Link><Link to="/" className="liquid-glass rounded-full px-5 py-2.5 text-[11px] font-medium tracking-[0.12em] text-white/90 transition-colors duration-200 hover:text-white">BACK HOME</Link></header>
     <div className={`relative z-20 mx-auto flex min-h-screen w-full max-w-[1160px] items-center px-5 pb-8 pt-24 transition-all duration-1000 sm:px-10 ${entered ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}>
       <section className="grid w-full items-end gap-12 lg:grid-cols-[1fr_430px] lg:gap-24">
