@@ -1,14 +1,15 @@
 {
   "models": [
     {
-      "id": "google/gemini-3.1-flash-image",
-      "label": "Nano Banana 2 (Gemini 3.1 Flash)",
+      "id": "google/gemini-3.1-flash-lite-image",
+      "label": "Gemini 3.1 Flash Lite Image",
+      "provider": "zenmux",
       "protocol": "gemini",
       "modality": "image",
       "supportsEdit": true,
       "maxRefImages": 1,
       "costUSD": 0.07,
-      "note": "快速高效,单图参考,$0.07/张",
+      "note": "核心图片模型，支持单图参考与多轮编辑",
       "params": {
         "aspectRatio": {
           "label": "比例",
@@ -25,32 +26,9 @@
       }
     },
     {
-      "id": "google/gemini-3-pro-image-preview",
-      "label": "Nano Banana Pro (Gemini 3 Pro)",
-      "protocol": "gemini",
-      "modality": "image",
-      "supportsEdit": true,
-      "maxRefImages": 1,
-      "costUSD": 0.13,
-      "note": "质量最高,单图参考,$0.13/张",
-      "params": {
-        "aspectRatio": {
-          "label": "比例",
-          "type": "select",
-          "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"],
-          "default": "1:1"
-        },
-        "imageSize": {
-          "label": "分辨率",
-          "type": "select",
-          "options": ["1K", "2K", "4K"],
-          "default": "2K"
-        }
-      }
-    },
-    {
       "id": "openai/gpt-image-2",
       "label": "GPT-Image-2 (OpenAI)",
+      "provider": "zenmux",
       "protocol": "openai-images",
       "modality": "image",
       "supportsEdit": true,
@@ -74,33 +52,16 @@
       }
     },
     {
-      "id": "qwen/qwen-image-2.0-pro",
-      "label": "Qwen-Image-2.0-Pro",
-      "protocol": "imagen",
-      "modality": "image",
-      "supportsEdit": false,
-      "maxRefImages": 0,
-      "costUSD": 0.07,
-      "note": "通义出品,$0.07/张",
-      "params": {
-        "aspectRatio": {
-          "label": "比例",
-          "type": "select",
-          "options": ["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9"],
-          "default": "1:1"
-        }
-      }
-    },
-    {
       "id": "bytedance/doubao-seedance-2.0",
       "label": "Seedance 2.0 (Doubao)",
+      "provider": "zenmux",
       "protocol": "zenmux-video",
       "modality": "video",
       "supportsEdit": false,
       "maxRefImages": 9,
       "costUSD": 0.5,
       "default": true,
-      "note": "文生视频/图生视频,可传多张参考图,$0.5/条(预估)",
+      "note": "核心视频模型，支持文生视频和图生视频",
       "params": {
         "duration": {
           "label": "时长(秒)",
@@ -125,13 +86,14 @@
     {
       "id": "minimax/music-2.6",
       "label": "MiniMax Music 2.6",
+      "provider": "minimax",
       "protocol": "minimax-music",
       "modality": "music",
       "supportsEdit": false,
       "maxRefImages": 0,
       "costUSD": 0.1,
       "default": true,
-      "note": "文本风格 + 歌词生成音乐,直连 MiniMax(不经 zenmux),$0.1/首(预估)",
+      "note": "文本、歌词自动优化和纯音乐，直连 MiniMax",
       "params": {
         "lyrics": {
           "label": "歌词",
@@ -142,6 +104,36 @@
           "label": "纯音乐(无人声)",
           "type": "boolean",
           "default": false
+        },
+        "lyricsOptimizer": {
+          "label": "自动写词",
+          "type": "boolean",
+          "default": true
+        },
+        "format": {
+          "label": "格式",
+          "type": "select",
+          "options": ["mp3", "wav"],
+          "default": "mp3"
+        }
+      }
+    },
+    {
+      "id": "minimax/music-cover",
+      "label": "MiniMax Music Cover",
+      "provider": "minimax",
+      "protocol": "minimax-cover",
+      "modality": "music",
+      "supportsEdit": false,
+      "maxRefImages": 0,
+      "costUSD": 0.1,
+      "default": false,
+      "note": "上传参考音频，生成目标风格翻唱",
+      "params": {
+        "lyrics": {
+          "label": "歌词（可选，留空自动识别）",
+          "type": "textarea",
+          "default": ""
         },
         "format": {
           "label": "格式",

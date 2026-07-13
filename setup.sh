@@ -89,7 +89,9 @@ echo "${GREEN}✓ 已生成 .env${RESET}"
 echo
 echo "正在安装依赖(npm install)…"
 npm install --silent
-echo "${GREEN}✓ 依赖安装完成${RESET}"
+echo "正在构建生产前端…"
+npm run build --silent
+echo "${GREEN}✓ 依赖安装与构建完成${RESET}"
 
 # ---------- 6. 显示账密(仅此一次) ----------
 echo

@@ -1,0 +1,215 @@
+dsl: gimage/1
+id: gimage-media-orchestration
+title: GImage 多媒体生成编排
+intent: 一份契约描述创作请求、模型调用、额度约束、资产落盘与模型目录维护。
+
+entities:
+  - id: request
+    title: 创作请求
+    states: [received, validated, rejected]
+    note: 用户提交的提示词、参考素材与模型参数。
+  - id: generation
+    title: 生成任务
+    states: [draft, submitted, processing, completed, failed]
+    note: 同步图片/音乐和异步视频统一以任务状态表达。
+  - id: asset
+    title: 创作资产
+    states: [staged, available, deleted]
+    note: 输出媒体与其元数据，存于本地 data/images。
+  - id: model_catalog
+    title: 模型目录
+    states: [draft, enabled, disabled]
+    note: 运行时目录在 data/config/models.json，不含密钥。
+
+rules:
+  - id: quota_before_call
+    title: 调用上游前预留额度
+    intent: 防止并发请求突破用户的单日预算。
+  - id: server_keeps_secrets
+    title: 密钥仅保留在服务端
+    intent: 浏览器只能读取脱敏的模型和供应商元数据。
+  - id: local_data_only
+    title: 运行数据固定在 data 目录
+    intent: 裸部署不依赖数据库；同一实例内以原子写入保证一致性。
+
+externals:
+  - id: zenmux
+    title: ZenMux 多协议网关
+    operations:
+      - id: image_generate
+        title: 图片生成或编辑
+      - id: video_generate
+        title: 视频任务提交
+  - id: minimax
+    title: MiniMax 音乐服务
+    operations:
+      - id: music_generate
+        title: 文本音乐或翻唱生成
+
+paragraphs:
+  - id: intake_request
+    title: 接收创作请求
+    intent: 解析提示词、模型和参考素材，形成可验证的请求。
+    steps:
+      - kind: create
+        entity: request
+        intent: 记录原始输入。
+      - kind: guard
+        condition: prompt.length > 0 && prompt.length <= 4000
+        intent: 拒绝空提示词与超长提示词。
+      - kind: change
+        entity: request
+        from: received
+        to: validated
+        intent: 输入通过模型参数和素材限制校验。
+    branches:
+      - id: invalid_input
+        classification: exception
+        when: prompt_or_params_invalid
+        steps:
+          - kind: change
+            entity: request
+            from: received
+            to: rejected
+            intent: 返回可理解的输入错误。
+        next: respond_rejection
+    next: reserve_quota
+
+  - id: reserve_quota
+    title: 预留预算
+    intent: 在调用外部模型前以本地账本预留估算成本。
+    steps:
+      - kind: guard
+        condition: remaining_budget >= model.cost
+        intent: 确保请求仍在账户日额度内。
+      - kind: create
+        entity: generation
+        intent: 创建待提交的生成任务。
+      - kind: change
+        entity: generation
+        from: draft
+        to: submitted
+        intent: 额度预留完成，可调用上游。
+    branches:
+      - id: quota_exhausted
+        classification: exception
+        when: remaining_budget < model.cost
+        steps:
+          - kind: forbid
+            intent: 不向任何上游发送生成请求。
+        next: respond_rejection
+    next: dispatch_model
+
+  - id: dispatch_model
+    title: 按模型分派
+    intent: 依据模型目录选择 ZenMux 或 MiniMax 的适配器；不在前端暴露密钥。
+    steps:
+      - kind: call
+        external: zenmux
+        operation: image_generate
+        intent: 图片模型经 Gemini 或 OpenAI Images 协议处理。
+      - kind: call
+        external: zenmux
+        operation: video_generate
+        intent: Seedance 视频创建异步任务。
+      - kind: call
+        external: minimax
+        operation: music_generate
+        intent: Music 2.6 和 Cover 音乐同步返回资产。
+      - kind: change
+        entity: generation
+        from: submitted
+        to: processing
+        intent: 标记外部调用正在进行。
+    branches:
+      - id: provider_failure
+        classification: exception
+        when: provider_returns_error
+        steps:
+          - kind: change
+            entity: generation
+            from: processing
+            to: failed
+            intent: 释放未完成任务的额度预留。
+          - kind: retry
+            intent: 用户可在修正输入或上游恢复后重新发起请求。
+        next: respond_rejection
+    next: persist_asset
+
+  - id: persist_asset
+    title: 固化资产并结算
+    intent: 将成功的媒体和元数据写入 data/images，并最终结算额度。
+    steps:
+      - kind: create
+        entity: asset
+        intent: 写入媒体文件和同名 JSON 元数据。
+      - kind: change
+        entity: asset
+        from: staged
+        to: available
+        intent: 资产可在库中访问和下载。
+      - kind: change
+        entity: generation
+        from: processing
+        to: completed
+        intent: 结算真实或估算成本。
+    next: respond_success
+
+  - id: catalog_change
+    title: 管理模型目录
+    intent: 管理员通过知识工作台修改运行时模型与供应商目录，再由适配器读取。
+    steps:
+      - kind: guard
+        condition: actor.role == admin
+        intent: 只有管理员可以变更目录。
+      - kind: change
+        entity: model_catalog
+        from: draft
+        to: enabled
+        intent: 保存经过 JSON 结构校验的目录。
+    branches:
+      - id: invalid_catalog
+        classification: exception
+        when: catalog_schema_invalid
+        steps:
+          - kind: forbid
+            intent: 不覆盖当前可用目录。
+        next: respond_rejection
+
+  - id: respond_success
+    title: 返回可用资产
+    intent: 浏览器获得资产 ID、访问地址与更新后的预算信息。
+    steps:
+      - kind: note
+        note: 视频在任务完成前会轮询状态；这是异步回路的一部分。
+
+  - id: respond_rejection
+    title: 返回可理解的拒绝或错误
+    intent: 保持错误边界，不回传密钥和供应商原始响应。
+    steps:
+      - kind: note
+        note: 用户可返回接收请求段落再次尝试，循环是有意保留的。
+    next: intake_request
+
+relations:
+  - from: request
+    to: intake_request
+    kind: enters
+  - from: quota_before_call
+    to: reserve_quota
+    kind: governs
+  - from: server_keeps_secrets
+    to: dispatch_model
+    kind: constrains
+  - from: local_data_only
+    to: persist_asset
+    kind: constrains
+  - from: generation
+    to: asset
+    kind: materializes
+  - from: model_catalog
+    to: dispatch_model
+    kind: selects
+  - from: catalog_change
+    to: model_catalog
+    kind: changes

@@ -1,22 +1,55 @@
 {
   "name": "gimage",
   "version": "1.0.0",
-  "description": "自托管多账户 AI 创作站(图片/视频/音乐生成,zenmux + MiniMax 多模型,本地 JSON 存储)",
+  "description": "生产化自托管 AI 创作工作台（本地文件存储）",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "vite --host 0.0.0.0",
+    "server:dev": "node --watch server.js",
+    "build": "npm run typecheck && vite build",
+    "typecheck": "tsc --noEmit",
+    "preview": "vite preview",
+    "test": "node --test tests/*.test.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
+    "@tanstack/react-query": "^5.101.2",
+    "@xyflow/react": "^12.11.2",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
     "express-session": "^1.18.0",
-    "multer": "^2.1.1",
-    "session-file-store": "^1.5.0"
+    "gsap": "^3.15.0",
+    "helmet": "^8.3.0",
+    "lucide-react": "^1.24.0",
+    "multer": "^2.2.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-hook-form": "^7.81.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.18.1",
+    "remark-gfm": "^4.0.1",
+    "session-file-store": "^1.5.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/express-session": "^1.19.0",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "autoprefixer": "^10.5.2",
+    "postcss": "^8.5.19",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.4"
   }
 }

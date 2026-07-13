@@ -4,15 +4,18 @@
 //   GET {base}/management/subscription/detail → 订阅档位 + Flow 配额(5h/7d/月)
 //
 // 「订阅有没有额度」看的是 subscription.quota_5_hour / quota_7_day 的 remaining_flows。
-const BASE = (process.env.ZENMUX_OPENAI_BASE || 'https://zenmux.ai/api/v1').replace(/\/$/, '');
-const MGMT_KEY = process.env.ZENMUX_MANAGEMENT_KEY || '';
+import { fetchWithTimeout } from './httpUtil.js';
+import { getProvider, providerValue } from './providerRegistry.js';
 
 let cache = { at: 0, data: null };
 const TTL = 60 * 1000; // 60s 缓存,避免频繁请求平台
 
 async function getJSON(path) {
-  const resp = await fetch(`${BASE}${path}`, {
-    headers: { Authorization: `Bearer ${MGMT_KEY}` },
+  const provider = await getProvider('zenmux');
+  const base = providerValue(provider, 'openaiBase');
+  const managementKey = providerValue(provider, 'managementKey');
+  const resp = await fetchWithTimeout(`${base}${path}`, {
+    headers: { Authorization: `Bearer ${managementKey}` },
   });
   const text = await resp.text();
   let json;
@@ -25,7 +28,8 @@ async function getJSON(path) {
 
 /** 聚合服务器状态;有 60s 缓存。未配置 management key 时返回 {configured:false}。 */
 export async function getServerStatus({ force = false } = {}) {
-  if (!MGMT_KEY) return { configured: false };
+  const provider = await getProvider('zenmux');
+  if (!providerValue(provider, 'managementKey')) return { configured: false };
   if (!force && cache.data && Date.now() - cache.at < TTL) {
     return { ...cache.data, cached: true };
   }

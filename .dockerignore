@@ -1,0 +1,8 @@
+node_modules
+dist
+data
+.env
+.git
+.playwright-mcp
+.design-ref
+docs/screenshot.png

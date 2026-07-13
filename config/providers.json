@@ -1,0 +1,40 @@
+{
+  "providers": {
+    "zenmux": {
+      "label": "ZenMux",
+      "enabled": true,
+      "adapter": "multi-protocol",
+      "apiKeyEnv": "ZENMUX_API_KEY",
+      "managementKeyEnv": "ZENMUX_MANAGEMENT_KEY",
+      "openaiBaseEnv": "ZENMUX_OPENAI_BASE",
+      "openaiBase": "https://zenmux.ai/api/v1",
+      "geminiBaseEnv": "ZENMUX_GEMINI_BASE",
+      "geminiBase": "https://zenmux.ai/api/vertex-ai/v1",
+      "videoBaseEnv": "ZENMUX_VIDEO_BASE"
+    },
+    "minimax": {
+      "label": "MiniMax",
+      "enabled": true,
+      "adapter": "minimax-music",
+      "apiKeyEnv": "MINIMAX_API_KEY",
+      "baseEnv": "MINIMAX_BASE",
+      "base": "https://api.minimaxi.com/v1"
+    },
+    "openai-compatible": {
+      "label": "OpenAI Images Compatible",
+      "enabled": false,
+      "adapter": "openai-images",
+      "apiKeyEnv": "OPENAI_COMPATIBLE_API_KEY",
+      "openaiBaseEnv": "OPENAI_COMPATIBLE_BASE",
+      "openaiBase": "https://api.openai.com/v1"
+    },
+    "gemini-compatible": {
+      "label": "Gemini Compatible",
+      "enabled": false,
+      "adapter": "gemini",
+      "apiKeyEnv": "GEMINI_COMPATIBLE_API_KEY",
+      "geminiBaseEnv": "GEMINI_COMPATIBLE_BASE",
+      "geminiBase": "https://generativelanguage.googleapis.com/v1beta"
+    }
+  }
+}

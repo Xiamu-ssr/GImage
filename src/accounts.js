@@ -6,6 +6,16 @@ import { DATA_DIR, readJSON, updateJSON } from './store.js';
 
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
 const DEFAULT_BUDGET = 1.5; // $1.50/天
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_DAILY_BUDGET = 100_000;
+
+function parseBudget(value) {
+  const budget = Number(value);
+  if (!Number.isFinite(budget) || budget < 0 || budget > MAX_DAILY_BUDGET) {
+    throw new Error(`每日额度需在 0 到 ${MAX_DAILY_BUDGET} 之间`);
+  }
+  return +budget.toFixed(2);
+}
 
 export async function listAccounts() {
   return readJSON(ACCOUNTS_FILE, []);
@@ -43,9 +53,9 @@ export async function verifyPassword(username, password) {
 export async function createAccount({ username, password, role = 'user', dailyBudget = DEFAULT_BUDGET }) {
   username = String(username || '').trim();
   if (!username) throw new Error('用户名不能为空');
-  if (!password || String(password).length < 4) throw new Error('密码至少 4 位');
+  if (!password || String(password).length < MIN_PASSWORD_LENGTH) throw new Error(`密码至少 ${MIN_PASSWORD_LENGTH} 位`);
   const passwordHash = await bcrypt.hash(String(password), 10);
-  const budget = Number.isFinite(+dailyBudget) ? Math.max(0, +Number(+dailyBudget).toFixed(2)) : DEFAULT_BUDGET;
+  const budget = dailyBudget === undefined || dailyBudget === null || dailyBudget === '' ? DEFAULT_BUDGET : parseBudget(dailyBudget);
 
   await updateJSON(ACCOUNTS_FILE, [], (accounts) => {
     if (accounts.some((a) => a.username === username)) throw new Error('用户名已存在');
@@ -63,7 +73,7 @@ export async function createAccount({ username, password, role = 'user', dailyBu
 export async function updateAccount(username, { password, dailyBudget, role }) {
   let passwordHash;
   if (password) {
-    if (String(password).length < 4) throw new Error('密码至少 4 位');
+    if (String(password).length < MIN_PASSWORD_LENGTH) throw new Error(`密码至少 ${MIN_PASSWORD_LENGTH} 位`);
     passwordHash = await bcrypt.hash(String(password), 10);
   }
   await updateJSON(ACCOUNTS_FILE, [], (accounts) => {
@@ -71,7 +81,7 @@ export async function updateAccount(username, { password, dailyBudget, role }) {
     if (!acc) throw new Error('账户不存在');
     if (passwordHash) acc.passwordHash = passwordHash;
     if (dailyBudget !== undefined && dailyBudget !== null && dailyBudget !== '') {
-      acc.dailyBudget = Math.max(0, +Number(+dailyBudget).toFixed(2));
+      acc.dailyBudget = parseBudget(dailyBudget);
     }
     if (role && (role === 'admin' || role === 'user')) acc.role = role;
     return accounts;
