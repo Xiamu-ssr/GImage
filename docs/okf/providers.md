@@ -19,14 +19,12 @@ timestamp: 2026-07-13
 | 视频 | `bytedance/doubao-seedance-2.0` | ZenMux | 文生/图生视频 |
 | 音乐 | `music-2.6` | MiniMax | 写词、自动写词或纯音乐 |
 | 音乐 | `music-cover` | MiniMax | 快速翻唱与高级两步翻唱 |
-| 音乐 | `music-01` | MiniMax | 旧版片段重演：从短片段拆出人声与伴奏，只按歌词合成 |
 
 ## MiniMax 音乐工作流
 
-1. **文本音乐**：给出风格和歌词；也可开启 `lyrics_optimizer` 自动写词，或选择纯音乐。
-2. **快速翻唱**：上传参考音频并给出目标风格，服务端以 `audio_base64` 调用 `music-cover`。
-3. **高级翻唱**：先调用 `/api/music-cover/preprocess`，获得 24 小时有效的 `cover_feature_id` 和结构化歌词；用户修改歌词后再生成。
-4. **片段重演（music-01）**：上传 10–60 秒、同时含人声和伴奏的片段，服务端调用 `/music_upload` 获得 `voice_id` 与 `instrumental_id`，再以原歌词调用 `music-01`。它不发送风格提示词，单次输出最多约 60 秒；`##` 仅作为伴奏边界标记，不是歌词内容。
+1. **文本音乐**：`music-2.6` 接收风格和歌词；也可开启 `lyrics_optimizer` 自动写词，或选择纯音乐。
+2. **快速翻唱**：`music-cover` 接收参考音频与目标演唱描述，服务端以 `audio_base64` 调用；歌词可留空，由 MiniMax 自动识别。
+3. **歌词编辑翻唱**：先调用 `/api/music-cover/preprocess`，获得 24 小时有效的 `cover_feature_id`、识别歌词和段落时间线。用户校正歌词后，以 `cover_feature_id`、歌词和目标演唱描述调用同一个 `music-cover` 模型。
 
 ## 扩展供应商
 

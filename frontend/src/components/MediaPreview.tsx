@@ -39,13 +39,28 @@ function AudioPreview({ asset, className, onOpen }: { asset: Asset; className: s
   </div>;
 }
 
+function VideoPreview({ asset, className, onOpen }: { asset: Asset; className: string; onOpen?: () => void }) {
+  const [failed, setFailed] = useState(false);
+  // 卡片只承担“打开详情”的动作；详情内必须使用原生 controls，不能复用静音缩略图。
+  if (!onOpen) return <div className={`video-detail-player ${className}`}>
+    <video controls playsInline preload="metadata" onError={() => setFailed(true)}>
+      <source src={asset.assetUrl} type={asset.mimeType || 'video/mp4'} />
+    </video>
+    {failed && <p>浏览器无法解码此视频。可下载原文件后播放。</p>}
+  </div>;
+  return <button type="button" className={`media-preview is-video ${className}`} onClick={onOpen} aria-label="打开视频播放器">
+    <video src={asset.assetUrl} muted playsInline preload="metadata" />
+    <span className="play-badge"><Play size={18} fill="currentColor" /></span>
+  </button>;
+}
+
 export function MediaPreview({ asset, className = '', onOpen }: { asset: Asset; className?: string; onOpen?: () => void }) {
   if (asset.status !== 'done') {
     return <div className={`media-placeholder ${asset.status === 'failed' ? 'is-error' : ''} ${className}`}>
       {asset.status === 'failed' ? <span>{asset.error || '任务未完成'}</span> : <><i className="spinner" /> <span>{asset.status === 'pending' ? '等待任务开始' : '正在生成内容'}</span></>}
     </div>;
   }
-  if (asset.modality === 'video') return <button className={`media-preview is-video ${className}`} onClick={onOpen} aria-label="播放视频"><video src={asset.assetUrl} muted preload="metadata" /><span className="play-badge"><Play size={18} fill="currentColor" /></span></button>;
+  if (asset.modality === 'video') return <VideoPreview asset={asset} className={className} onOpen={onOpen} />;
   if (asset.modality === 'music') return <AudioPreview asset={asset} className={className} onOpen={onOpen} />;
   return <button className={`media-preview ${className}`} onClick={onOpen} aria-label="查看图片"><img src={asset.assetUrl} alt={asset.prompt || 'AI 生成图片'} loading="lazy" /></button>;
 }

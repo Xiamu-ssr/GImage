@@ -22,7 +22,7 @@ import {
 } from './src/quota.js';
 import { requireLogin, requireAdmin } from './src/auth.js';
 import { loadModels, getModel, generateImage, submitJob, checkJob, clearModelsCache } from './src/providers.js';
-import { generateMusic, generateMusic01, preprocessMusicCover } from './src/minimax.js';
+import { generateMusic, preprocessMusicCover } from './src/minimax.js';
 import { getServerStatus } from './src/platform.js';
 import { clearProviderRegistryCache } from './src/providerRegistry.js';
 import { ensureRuntimeConfig, readRuntimeConfig, runtimeConfigPath, writeRuntimeConfig } from './src/runtimeConfig.js';
@@ -223,7 +223,7 @@ app.post('/api/music-cover/preprocess', requireLogin, generationLimiter, upload.
     }
     const result = await preprocessMusicCover(audio.buffer);
     return res.json({
-      ok: true, coverFeatureId: result.coverFeatureId, lyrics: result.lyrics,
+      ok: true, coverFeatureId: result.coverFeatureId, lyrics: result.lyrics, structure: result.structure, duration: result.duration,
       ...(claimedSha256 ? { inputAudit: { bytes: audio.size, sha256: sourceSha256 } } : {}),
     });
   } catch (err) {
@@ -262,11 +262,8 @@ app.post('/api/generate', requireLogin, generationLimiter, upload.fields([{ name
     if (typeof model !== 'string' || model.length > 200) return res.status(400).json({ error: '无效模型' });
     const modelDef = await getModel(model);
     if (!modelDef) return res.status(400).json({ error: '无效模型' });
-    const isMusic01 = modelDef.protocol === 'minimax-music-01';
     let prompt = String(promptRaw || '').trim();
-    if (prompt.length > 4_000 || (!isMusic01 && !prompt)) return res.status(400).json({ error: '提示词长度需在 1 到 4000 个字符之间' });
-    // music-01 不接受 prompt；只用这条元数据标签维持创作线与资产检索的可读性。
-    if (isMusic01 && !prompt) prompt = '片段重演 · 未设风格提示';
+    if (prompt.length > 4_000 || !prompt) return res.status(400).json({ error: '提示词长度需在 1 到 4000 个字符之间' });
     const modality = modelDef.modality || 'image';
 
     const estimatedCost = modelDef.costUSD || 0.05;
@@ -278,17 +275,11 @@ app.post('/api/generate', requireLogin, generationLimiter, upload.fields([{ name
     if (referenceAudio && referenceAudio.size > 50 * 1024 * 1024) {
       return res.status(400).json({ error: '参考音频不能超过 50MB' });
     }
-    const supportsReferenceAudio = ['minimax-cover', 'minimax-music-01'].includes(modelDef.protocol);
+    const supportsReferenceAudio = modelDef.protocol === 'minimax-cover';
     if (modelDef.protocol === 'minimax-cover' && !referenceAudio) {
       if (typeof coverFeatureIdRaw !== 'string' || !coverFeatureIdRaw.trim() || coverFeatureIdRaw.length > 256) {
         return res.status(400).json({ error: '翻唱模式需要上传 6 秒到 6 分钟的参考音频，或完成高级预处理' });
       }
-    }
-    if (modelDef.protocol === 'minimax-music-01' && !referenceAudio) {
-      return res.status(400).json({ error: '片段重演需要上传一段人声与伴奏同时存在的参考音频' });
-    }
-    if (modelDef.protocol === 'minimax-music-01' && coverFeatureIdRaw) {
-      return res.status(400).json({ error: '片段重演不使用 Cover 特征，请重新上传参考片段' });
     }
     if (!supportsReferenceAudio && (referenceAudio || coverFeatureIdRaw)) {
       return res.status(400).json({ error: '当前模型不支持参考音频' });
@@ -336,14 +327,12 @@ app.post('/api/generate', requireLogin, generationLimiter, upload.fields([{ name
 
     // ---- 音乐:直连 MiniMax,同步返回 ----
     if (modality === 'music') {
-      const { buffer, mimeType } = modelDef.protocol === 'minimax-music-01'
-        ? await generateMusic01({ referenceAudio: referenceAudio?.buffer, lyrics: params.lyrics, format: params.format || 'mp3' })
-        : await generateMusic({
-          model: modelDef.protocol === 'minimax-cover' ? 'music-cover' : 'music-2.6',
-          prompt, lyrics: params.lyrics, isInstrumental: !!params.isInstrumental,
-          lyricsOptimizer: !!params.lyricsOptimizer, format: params.format || 'mp3',
-          referenceAudio: referenceAudio?.buffer, coverFeatureId: String(coverFeatureIdRaw || '').trim(),
-        });
+      const { buffer, mimeType } = await generateMusic({
+        model: modelDef.protocol === 'minimax-cover' ? 'music-cover' : 'music-2.6',
+        prompt, lyrics: params.lyrics, isInstrumental: !!params.isInstrumental,
+        lyricsOptimizer: !!params.lyricsOptimizer, format: params.format || 'mp3',
+        referenceAudio: referenceAudio?.buffer, coverFeatureId: String(coverFeatureIdRaw || '').trim(),
+      });
       const meta = {
         id, sessionId, username, model, modality, prompt, params,
         status: 'done', mimeType, cost: estimatedCost, usage: null, inputRefs: [], error: null,

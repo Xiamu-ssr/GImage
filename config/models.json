@@ -120,7 +120,7 @@
     },
     {
       "id": "minimax/music-cover",
-      "label": "MiniMax Music Cover",
+      "label": "MiniMax Music Cover · 翻唱",
       "provider": "minimax",
       "protocol": "minimax-cover",
       "modality": "music",
@@ -128,35 +128,10 @@
       "maxRefImages": 0,
       "costUSD": 0.1,
       "default": false,
-      "note": "上传参考音频，生成目标风格翻唱",
+      "note": "参考歌曲翻唱：可直接生成，或先解析歌词与段落后精修",
       "params": {
         "lyrics": {
-          "label": "歌词（可选，留空自动识别）",
-          "type": "textarea",
-          "default": ""
-        },
-        "format": {
-          "label": "格式",
-          "type": "select",
-          "options": ["mp3", "wav"],
-          "default": "mp3"
-        }
-      }
-    },
-    {
-      "id": "minimax/music-01-reference",
-      "label": "MiniMax Music 01 · 片段重演",
-      "provider": "minimax",
-      "protocol": "minimax-music-01",
-      "modality": "music",
-      "supportsEdit": false,
-      "maxRefImages": 0,
-      "costUSD": 0.1,
-      "default": false,
-      "note": "旧版片段工作流：分离人声与伴奏，只按原词重演；不传风格提示，单次最长约 60 秒",
-      "params": {
-        "lyrics": {
-          "label": "片段对应歌词（最多 196 字）",
+          "label": "歌词",
           "type": "textarea",
           "default": ""
         },

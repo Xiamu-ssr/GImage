@@ -12,6 +12,11 @@ import { MediaPreview } from '../components/MediaPreview';
 import { Modal } from '../components/Modal';
 
 type Reference = { id: string; kind: 'file'; file: File } | { id: string; kind: 'asset'; asset: Asset };
+type CoverWorkflow = 'quick' | 'lyrics';
+type CoverSegment = { start: number; end: number; label: string };
+type CoverAnalysis = { duration: number; structure: CoverSegment[] };
+
+const COVER_DIRECTION = '保持参考曲旋律、节奏与段落；清晰、自然的中文人声演唱。';
 
 const modes: Array<{ id: Modality; title: string; description: string; icon: typeof Sparkles }> = [
   { id: 'image', title: '静帧', description: '把一个构图、一束光或一次重写变得可见。', icon: ImagePlus },
@@ -30,6 +35,7 @@ function defaults(model?: Model) {
 }
 
 function assetSession(asset: Asset) { return asset.sessionId || asset.id; }
+function secondsLabel(seconds: number) { return Number.isFinite(seconds) && seconds > 0 ? `${Math.round(seconds * 10) / 10}s` : '—'; }
 
 export function StudioPage() {
   const me = useOutletContext<Me>();
@@ -41,6 +47,8 @@ export function StudioPage() {
   const [references, setReferences] = useState<Reference[]>([]);
   const [referenceAudio, setReferenceAudio] = useState<File | null>(null);
   const [coverFeatureId, setCoverFeatureId] = useState<string | null>(null);
+  const [coverWorkflow, setCoverWorkflow] = useState<CoverWorkflow>('lyrics');
+  const [coverAnalysis, setCoverAnalysis] = useState<CoverAnalysis | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [assetPicker, setAssetPicker] = useState(false);
   const [lightbox, setLightbox] = useState<Asset | null>(null);
@@ -59,11 +67,10 @@ export function StudioPage() {
   const selectedModel = modalityModels.find((model) => model.id === modelId) || modalityModels[0];
   const maxReferences = selectedModel?.maxRefImages || 0;
   const isCoverModel = selectedModel?.protocol === 'minimax-cover';
-  const isMusic01Model = selectedModel?.protocol === 'minimax-music-01';
-  const requiresReferenceAudio = isCoverModel || isMusic01Model;
-  const canGenerate = isMusic01Model
-    ? Boolean(referenceAudio && String(params.lyrics || '').trim())
-    : Boolean(prompt.trim() && (!isCoverModel || referenceAudio));
+  const coverLyricsReady = String(params.lyrics || '').trim().length >= 10;
+  const canGenerate = isCoverModel
+    ? Boolean(referenceAudio && prompt.trim() && (coverWorkflow === 'quick' || (coverFeatureId && coverLyricsReady)))
+    : Boolean(prompt.trim());
   const selectedMode = modes.find((mode) => mode.id === modality)!;
 
   useEffect(() => {
@@ -73,6 +80,8 @@ export function StudioPage() {
     setReferences([]);
     setReferenceAudio(null);
     setCoverFeatureId(null);
+    setCoverWorkflow('lyrics');
+    setCoverAnalysis(null);
     setModelPickerOpen(false);
   // Switching modality intentionally resets model-specific state.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,22 +105,23 @@ export function StudioPage() {
   const generate = useMutation({
     mutationFn: async () => {
       if (!selectedModel) throw new Error('请先选择模型');
-      if (requiresReferenceAudio && !referenceAudio) throw new Error(isMusic01Model ? '片段重演需要上传参考音频' : '翻唱模式需要上传参考音频');
+      if (isCoverModel && !referenceAudio) throw new Error('翻唱模式需要上传参考音频');
+      if (isCoverModel && coverWorkflow === 'lyrics' && !coverFeatureId) throw new Error('请先解析参考曲，再校正歌词并生成');
       const data = new FormData();
       data.append('model', selectedModel.id);
-      if (!isMusic01Model) data.append('prompt', prompt.trim());
+      data.append('prompt', prompt.trim());
       data.append('params', JSON.stringify(params));
       if (sessionId) data.append('sessionId', sessionId);
       const assetIds = references.filter((reference): reference is Extract<Reference, { kind: 'asset' }> => reference.kind === 'asset').map((reference) => reference.asset.id);
       if (assetIds.length) data.append('refAssetIds', JSON.stringify(assetIds));
       references.forEach((reference) => { if (reference.kind === 'file') data.append('refImages', reference.file); });
-      if (coverFeatureId) data.append('coverFeatureId', coverFeatureId);
-      if (referenceAudio && !coverFeatureId) data.append('refAudio', referenceAudio);
+      if (isCoverModel && coverWorkflow === 'lyrics' && coverFeatureId) data.append('coverFeatureId', coverFeatureId);
+      if (referenceAudio && (!isCoverModel || coverWorkflow === 'quick' || !coverFeatureId)) data.append('refAudio', referenceAudio);
       return api<GenerateResult>('/api/generate', { method: 'POST', body: data });
     },
     onSuccess: async (result) => {
       setSessionId(result.sessionId);
-      setPrompt(''); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null);
+      setPrompt(''); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null); setCoverAnalysis(null); setCoverWorkflow('lyrics');
       setNotice(result.status === 'pending' ? '动态片段已经送入队列，完成后会自动回到这里。' : '作品已归档到当前创作线。');
       queryClient.setQueryData<Me>(['me'], (current) => current ? { ...current, spent: result.spent, remaining: result.remaining } : current);
       await Promise.all([queryClient.invalidateQueries({ queryKey: ['history'] }), queryClient.invalidateQueries({ queryKey: ['assets'] })]);
@@ -123,17 +133,18 @@ export function StudioPage() {
       if (!referenceAudio) throw new Error('请先上传参考音频');
       const data = new FormData();
       data.append('refAudio', referenceAudio);
-      return api<{ ok: true; coverFeatureId: string; lyrics: string }>('/api/music-cover/preprocess', { method: 'POST', body: data });
+      return api<{ ok: true; coverFeatureId: string; lyrics: string; structure: CoverSegment[]; duration: number }>('/api/music-cover/preprocess', { method: 'POST', body: data });
     },
     onSuccess: (result) => {
       setCoverFeatureId(result.coverFeatureId);
+      setCoverAnalysis({ duration: result.duration, structure: result.structure || [] });
       if (result.lyrics) setParams((current) => ({ ...current, lyrics: result.lyrics }));
-      setNotice('已进入高级歌词编辑模式。若想最大限度保留原曲旋律，请直接生成，无需解析歌词。');
+      setNotice('参考曲已解析。请把歌词校正为准确原词，再生成翻唱。');
     },
   });
 
   const resetDraft = () => {
-    setSessionId(null); setPrompt(''); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null); setNotice('');
+    setSessionId(null); setPrompt(''); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null); setCoverAnalysis(null); setCoverWorkflow('lyrics'); setNotice('');
   };
   const chooseSession = (target: { id: string; items: Asset[] }) => {
     const last = target.items.at(-1);
@@ -153,7 +164,7 @@ export function StudioPage() {
   };
   const changeModel = (nextId: string) => {
     const next = models.find((model) => model.id === nextId);
-    setModelId(nextId); setParams(defaults(next)); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null); if (next?.protocol === 'minimax-music-01') setPrompt(''); setModelPickerOpen(false);
+    setModelId(nextId); setParams(defaults(next)); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null); setCoverAnalysis(null); setCoverWorkflow('lyrics'); setPrompt(next?.protocol === 'minimax-cover' ? COVER_DIRECTION : ''); setModelPickerOpen(false);
   };
 
   return <div className="atelier-page">
@@ -186,20 +197,27 @@ export function StudioPage() {
         <section className="atelier-brief">
           <div className="atelier-brief-head"><div><h2>{selectedMode.title}</h2><p>{selectedMode.description}</p></div><div className="atelier-model-menu"><button type="button" className="atelier-model-trigger" aria-haspopup="listbox" aria-expanded={modelPickerOpen} onClick={() => setModelPickerOpen((current) => !current)}><span>模型</span><b>{selectedModel?.label || '选择模型'}</b><ChevronDown size={16} /></button>{modelPickerOpen && <div className="atelier-model-options" role="listbox">{modalityModels.map((model) => <button type="button" key={model.id} role="option" aria-selected={model.id === selectedModel?.id} className={model.id === selectedModel?.id ? 'is-selected' : ''} onClick={() => changeModel(model.id)}><b>{model.label}</b><span>{model.note || money(model.costUSD)}</span></button>)}</div>}</div></div>
           {selectedModel?.note && <div className="atelier-model-note"><Sparkles size={14} /><span>{selectedModel.note}</span></div>}
-          {isMusic01Model ? <div className="atelier-model-note"><Music2 size={14} /><span>不填写风格提示。上传有人声和伴奏的短片段，填入这一段对应的歌词即可。</span></div> : <><textarea className="atelier-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} placeholder={modality === 'video' ? '说清楚镜头里的画面、运动、节奏与停顿…' : isCoverModel ? '说明希望保留什么旋律，以及想把唱法、情绪和编配带去哪里…' : modality === 'music' ? '从声音、情绪、场景或一句歌词开始描述…' : '描述构图、材质、光线、情绪，或你想要改写的地方…'} /><div className="atelier-suggestions">{quickPrompts[modality].map((item) => <button type="button" key={item} onClick={() => setPrompt(item)}>{item}</button>)}</div></>}
+          {isCoverModel ? <>
+            <div className="atelier-cover-flow" role="tablist" aria-label="翻唱工作流">
+              <button type="button" role="tab" aria-selected={coverWorkflow === 'quick'} className={coverWorkflow === 'quick' ? 'is-active' : ''} onClick={() => setCoverWorkflow('quick')}><b>快速翻唱</b><span>自动识别歌词</span></button>
+              <button type="button" role="tab" aria-selected={coverWorkflow === 'lyrics'} className={coverWorkflow === 'lyrics' ? 'is-active' : ''} onClick={() => setCoverWorkflow('lyrics')}><b>校正歌词</b><span>先解析，再编辑原词</span></button>
+            </div>
+            <label className="atelier-cover-direction"><span>目标演唱</span><textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={300} placeholder="例如：保持参考曲旋律与段落，清晰、自然的中文人声演唱。" /></label>
+          </> : <><textarea className="atelier-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} placeholder={modality === 'video' ? '说清楚镜头里的画面、运动、节奏与停顿…' : modality === 'music' ? '从声音、情绪、场景或一句歌词开始描述…' : '描述构图、材质、光线、情绪，或你想要改写的地方…'} /><div className="atelier-suggestions">{quickPrompts[modality].map((item) => <button type="button" key={item} onClick={() => setPrompt(item)}>{item}</button>)}</div></>}
         </section>
 
         <section className="atelier-materials">
           <div className="atelier-material-head"><div><span>创作设置</span></div><SlidersHorizontal size={18} /></div>
           <div className="atelier-material-grid">
             {maxReferences > 0 && <div className="atelier-material-card"><div className="atelier-card-title"><ImagePlus size={16} /><span>视觉参考</span><small>{references.length} / {maxReferences}</small></div><div className="atelier-reference-shelf">{references.map((reference, index) => <div className="atelier-reference" key={reference.id}><img src={previewUrls[index]} alt="待提交参考图" /><button type="button" onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))} aria-label="移除参考图"><X size={13} /></button></div>)}{references.length < maxReferences && <label className="atelier-upload-tile"><Upload size={17} /><span>上传</span><input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ''; }} /></label>}<button type="button" className="atelier-library-tile" onClick={() => setAssetPicker(true)} disabled={references.length >= maxReferences}><Layers3 size={16} /><span>资产库</span></button></div></div>}
-            {requiresReferenceAudio && <div className="atelier-material-card wide"><div className="atelier-card-title"><Music2 size={16} /><span>{isMusic01Model ? '片段参考' : '旋律参考'}</span>{isCoverModel && coverFeatureId && <small className="is-ready">歌词编辑</small>}</div>{referenceAudio ? <div className="atelier-audio-file"><Music2 size={16} /><div><b>{referenceAudio.name}</b><small>{isMusic01Model ? '将分离人声与伴奏，只根据下方歌词重演（约 60 秒内）' : coverFeatureId ? '高级歌词编辑 · 特征保留 24 小时' : '一步翻唱 · 直接保留原曲旋律与节奏'}</small></div>{isCoverModel && !coverFeatureId && <button type="button" onClick={() => preprocessCover.mutate()} disabled={preprocessCover.isPending}>{preprocessCover.isPending ? <LoaderCircle className="spin" size={14} /> : <><Wand2 size={14} />编辑歌词（可选）</>}</button>}<button type="button" className="remove" onClick={() => { setReferenceAudio(null); setCoverFeatureId(null); }} aria-label="移除参考音频"><X size={14} /></button></div> : <label className="atelier-audio-drop"><Music2 size={18} /><span>{isMusic01Model ? '上传 10–60 秒、同时含人声和伴奏的片段' : '上传参考音频，默认保留原旋律与节奏'}</span><small>{isMusic01Model ? '不填写风格提示；它会按片段的人声、伴奏和下方歌词生成。' : '需要修改歌词时，再进入高级歌词编辑。'} 支持 MP3、WAV、FLAC、AAC、M4A、OGG；最大 50MB</small><input type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/mp4,audio/aac,audio/ogg" hidden onChange={(event) => { setReferenceAudio(event.target.files?.[0] || null); setCoverFeatureId(null); event.currentTarget.value = ''; }} /></label>}</div>}
+            {isCoverModel && <div className="atelier-material-card wide"><div className="atelier-card-title"><Music2 size={16} /><span>参考歌曲</span>{coverWorkflow === 'lyrics' && coverFeatureId && <small className="is-ready">已解析</small>}</div>{referenceAudio ? <div className="atelier-audio-file"><Music2 size={16} /><div><b>{referenceAudio.name}</b><small>{coverWorkflow === 'lyrics' ? coverAnalysis ? `${secondsLabel(coverAnalysis.duration)} · 已提取 ${coverAnalysis.structure.length || 1} 段歌词` : '下一步：解析歌词与段落' : '直接交给 MiniMax 识别歌词并翻唱'}</small></div>{coverWorkflow === 'lyrics' && <button type="button" onClick={() => preprocessCover.mutate()} disabled={preprocessCover.isPending}>{preprocessCover.isPending ? <LoaderCircle className="spin" size={14} /> : <><Wand2 size={14} />{coverFeatureId ? '重新解析' : '解析歌词'}</>}</button>}<button type="button" className="remove" onClick={() => { setReferenceAudio(null); setCoverFeatureId(null); setCoverAnalysis(null); setParams((current) => ({ ...current, lyrics: '' })); }} aria-label="移除参考音频"><X size={14} /></button></div> : <label className="atelier-audio-drop"><Music2 size={18} /><span>上传一首参考歌曲</span><small>支持 MP3、WAV、FLAC、AAC、M4A、OGG；最大 50MB。歌词校正模式会先解析该音频。</small><input type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/mp4,audio/aac,audio/ogg" hidden onChange={(event) => { setReferenceAudio(event.target.files?.[0] || null); setCoverFeatureId(null); setCoverAnalysis(null); setParams((current) => ({ ...current, lyrics: '' })); event.currentTarget.value = ''; }} /></label>}</div>}
+            {isCoverModel && coverWorkflow === 'lyrics' && coverAnalysis && <div className="atelier-cover-analysis"><div><b>参考曲解析</b><span>{secondsLabel(coverAnalysis.duration)} · 可直接校正下方歌词</span></div><div className="atelier-segment-list">{coverAnalysis.structure.slice(0, 8).map((segment, index) => <span key={`${segment.start}-${index}`}>{segment.label} {secondsLabel(segment.start)}–{secondsLabel(segment.end)}</span>)}</div></div>}
             {Object.entries(selectedModel?.params || {}).filter(([, config]) => config.type !== 'textarea').map(([key, config]) => config.type === 'boolean' ? <label className="atelier-toggle" key={key}><input type="checkbox" checked={Boolean(params[key])} onChange={(event) => setParams((current) => ({ ...current, [key]: event.target.checked }))} /><span>{config.label}</span><i /></label> : <label className="atelier-control" key={key}><span>{config.label}</span><select value={String(params[key] ?? '')} onChange={(event) => setParams((current) => ({ ...current, [key]: event.target.value }))}>{config.options?.map((option) => <option key={option} value={option}>{option}</option>)}</select><ChevronDown size={14} /></label>)}
           </div>
-          {Object.entries(selectedModel?.params || {}).filter(([, config]) => config.type === 'textarea').map(([key, config]) => <label className="atelier-lyrics" key={key}><span>{config.label}</span><textarea rows={5} value={String(params[key] || '')} maxLength={isMusic01Model ? 196 : undefined} onChange={(event) => setParams((current) => ({ ...current, [key]: event.target.value }))} placeholder={isMusic01Model ? '粘贴这段片段对应的原歌词；不需要风格提示。' : isCoverModel ? '留空时会尝试从参考音频识别歌词；也可以在这里精修字词。' : '可填写歌词，或使用上方的自动写词选项。'} /></label>)}
+          {Object.entries(selectedModel?.params || {}).filter(([, config]) => config.type === 'textarea').map(([key, config]) => <label className="atelier-lyrics" key={key}><span>{config.label}</span><textarea rows={isCoverModel ? 7 : 5} value={String(params[key] || '')} onChange={(event) => setParams((current) => ({ ...current, [key]: event.target.value }))} placeholder={isCoverModel ? coverWorkflow === 'lyrics' ? '解析后会填入歌词。请校正为准确原词，并尽量保留段落与行数。' : '可留空，让 MiniMax 从参考歌自动识别歌词。' : '可填写歌词，或使用上方的自动写词选项。'} /></label>)}
         </section>
 
-        <div className="atelier-submit-row"><div><span>{isMusic01Model ? (referenceAudio ? '片段与歌词已就绪' : '请添加参考片段') : isCoverModel ? (referenceAudio ? '旋律参考已就绪' : '请添加旋律参考') : selectedModel ? shortModel(selectedModel.id) : '正在读取模型'}</span></div><button className="atelier-generate" onClick={() => canGenerate && generate.mutate()} disabled={generate.isPending || !canGenerate}>{generate.isPending ? <LoaderCircle className="spin" size={18} /> : <><span>{modality === 'music' ? '生成这一段声音' : modality === 'video' ? '生成动态片段' : '生成视觉作品'}</span><ArrowUpRight size={18} /></>}</button></div>
+        <div className="atelier-submit-row"><div><span>{isCoverModel ? !referenceAudio ? '请添加参考歌曲' : coverWorkflow === 'lyrics' && !coverFeatureId ? '先解析歌词与段落' : coverWorkflow === 'lyrics' && !coverLyricsReady ? '请校正至少 10 个字符的歌词' : '参考曲与歌词已就绪' : selectedModel ? shortModel(selectedModel.id) : '正在读取模型'}</span></div><button className="atelier-generate" onClick={() => canGenerate && generate.mutate()} disabled={generate.isPending || !canGenerate}>{generate.isPending ? <LoaderCircle className="spin" size={18} /> : <><span>{modality === 'music' ? isCoverModel ? '生成翻唱版本' : '生成这一段声音' : modality === 'video' ? '生成动态片段' : '生成视觉作品'}</span><ArrowUpRight size={18} /></>}</button></div>
         {(generate.error || notice) && <p className={`atelier-notice${generate.error ? ' error' : ''}`}>{generate.error?.message || notice}</p>}
       </main>
 
