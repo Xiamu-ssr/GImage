@@ -215,8 +215,17 @@ app.post('/api/music-cover/preprocess', requireLogin, generationLimiter, upload.
     const audio = req.file;
     if (!audio) return res.status(400).json({ error: '请上传参考音频' });
     if (audio.size > 50 * 1024 * 1024) return res.status(400).json({ error: '参考音频不能超过 50MB' });
+    // 可选的传输审计：仅在调用方明确提供源文件摘要时回传，便于排查参考音频是否被完整接收。
+    const sourceSha256 = crypto.createHash('sha256').update(audio.buffer).digest('hex');
+    const claimedSha256 = typeof req.body?.sourceSha256 === 'string' ? req.body.sourceSha256.trim().toLowerCase() : '';
+    if (claimedSha256 && (!/^[a-f0-9]{64}$/.test(claimedSha256) || claimedSha256 !== sourceSha256)) {
+      return res.status(422).json({ error: '参考音频传输校验失败，请重新上传原文件' });
+    }
     const result = await preprocessMusicCover(audio.buffer);
-    return res.json({ ok: true, coverFeatureId: result.coverFeatureId, lyrics: result.lyrics });
+    return res.json({
+      ok: true, coverFeatureId: result.coverFeatureId, lyrics: result.lyrics,
+      ...(claimedSha256 ? { inputAudit: { bytes: audio.size, sha256: sourceSha256 } } : {}),
+    });
   } catch (err) {
     console.error('[ERR] music cover preprocess:', err.message);
     return res.status(500).json({ error: publicError(err, '参考音频预处理失败，请稍后再试') });
