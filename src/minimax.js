@@ -39,11 +39,12 @@ export async function generateMusic({ model = 'music-2.6', prompt, lyrics = '', 
     body.lyrics_optimizer = !!lyricsOptimizer;
   }
 
+  // 完整翻唱最长可接近 6 分钟，音乐渲染明显长于图像接口；不能沿用通用 90 秒超时。
   const resp = await fetchWithTimeout(`${base}/music_generation`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
-  });
+  }, model === 'music-cover' ? 8 * 60_000 : 5 * 60_000);
 
   const text = await resp.text();
   if (!resp.ok) throw new Error(friendlyError(resp.status, text));
@@ -83,7 +84,7 @@ export async function preprocessMusicCover(referenceAudio) {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ model: 'music-cover', audio_base64: referenceAudio.toString('base64') }),
-  });
+  }, 3 * 60_000);
   const text = await resp.text();
   if (!resp.ok) throw new Error(friendlyError(resp.status, text));
   let json;
