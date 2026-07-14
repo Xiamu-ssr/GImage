@@ -59,6 +59,11 @@ export function StudioPage() {
   const selectedModel = modalityModels.find((model) => model.id === modelId) || modalityModels[0];
   const maxReferences = selectedModel?.maxRefImages || 0;
   const isCoverModel = selectedModel?.protocol === 'minimax-cover';
+  const isMusic01Model = selectedModel?.protocol === 'minimax-music-01';
+  const requiresReferenceAudio = isCoverModel || isMusic01Model;
+  const canGenerate = isMusic01Model
+    ? Boolean(referenceAudio && String(params.lyrics || '').trim())
+    : Boolean(prompt.trim() && (!isCoverModel || referenceAudio));
   const selectedMode = modes.find((mode) => mode.id === modality)!;
 
   useEffect(() => {
@@ -91,10 +96,10 @@ export function StudioPage() {
   const generate = useMutation({
     mutationFn: async () => {
       if (!selectedModel) throw new Error('请先选择模型');
-      if (isCoverModel && !referenceAudio) throw new Error('翻唱模式需要上传参考音频');
+      if (requiresReferenceAudio && !referenceAudio) throw new Error(isMusic01Model ? '片段重演需要上传参考音频' : '翻唱模式需要上传参考音频');
       const data = new FormData();
       data.append('model', selectedModel.id);
-      data.append('prompt', prompt.trim());
+      if (!isMusic01Model) data.append('prompt', prompt.trim());
       data.append('params', JSON.stringify(params));
       if (sessionId) data.append('sessionId', sessionId);
       const assetIds = references.filter((reference): reference is Extract<Reference, { kind: 'asset' }> => reference.kind === 'asset').map((reference) => reference.asset.id);
@@ -148,7 +153,7 @@ export function StudioPage() {
   };
   const changeModel = (nextId: string) => {
     const next = models.find((model) => model.id === nextId);
-    setModelId(nextId); setParams(defaults(next)); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null); setModelPickerOpen(false);
+    setModelId(nextId); setParams(defaults(next)); setReferences([]); setReferenceAudio(null); setCoverFeatureId(null); if (next?.protocol === 'minimax-music-01') setPrompt(''); setModelPickerOpen(false);
   };
 
   return <div className="atelier-page">
@@ -181,21 +186,20 @@ export function StudioPage() {
         <section className="atelier-brief">
           <div className="atelier-brief-head"><div><h2>{selectedMode.title}</h2><p>{selectedMode.description}</p></div><div className="atelier-model-menu"><button type="button" className="atelier-model-trigger" aria-haspopup="listbox" aria-expanded={modelPickerOpen} onClick={() => setModelPickerOpen((current) => !current)}><span>模型</span><b>{selectedModel?.label || '选择模型'}</b><ChevronDown size={16} /></button>{modelPickerOpen && <div className="atelier-model-options" role="listbox">{modalityModels.map((model) => <button type="button" key={model.id} role="option" aria-selected={model.id === selectedModel?.id} className={model.id === selectedModel?.id ? 'is-selected' : ''} onClick={() => changeModel(model.id)}><b>{model.label}</b><span>{model.note || money(model.costUSD)}</span></button>)}</div>}</div></div>
           {selectedModel?.note && <div className="atelier-model-note"><Sparkles size={14} /><span>{selectedModel.note}</span></div>}
-          <textarea className="atelier-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} placeholder={modality === 'video' ? '说清楚镜头里的画面、运动、节奏与停顿…' : isCoverModel ? '说明希望保留什么旋律，以及想把唱法、情绪和编配带去哪里…' : modality === 'music' ? '从声音、情绪、场景或一句歌词开始描述…' : '描述构图、材质、光线、情绪，或你想要改写的地方…'} />
-          <div className="atelier-suggestions">{quickPrompts[modality].map((item) => <button type="button" key={item} onClick={() => setPrompt(item)}>{item}</button>)}</div>
+          {isMusic01Model ? <div className="atelier-model-note"><Music2 size={14} /><span>不填写风格提示。上传有人声和伴奏的短片段，填入这一段对应的歌词即可。</span></div> : <><textarea className="atelier-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} maxLength={4000} placeholder={modality === 'video' ? '说清楚镜头里的画面、运动、节奏与停顿…' : isCoverModel ? '说明希望保留什么旋律，以及想把唱法、情绪和编配带去哪里…' : modality === 'music' ? '从声音、情绪、场景或一句歌词开始描述…' : '描述构图、材质、光线、情绪，或你想要改写的地方…'} /><div className="atelier-suggestions">{quickPrompts[modality].map((item) => <button type="button" key={item} onClick={() => setPrompt(item)}>{item}</button>)}</div></>}
         </section>
 
         <section className="atelier-materials">
           <div className="atelier-material-head"><div><span>创作设置</span></div><SlidersHorizontal size={18} /></div>
           <div className="atelier-material-grid">
             {maxReferences > 0 && <div className="atelier-material-card"><div className="atelier-card-title"><ImagePlus size={16} /><span>视觉参考</span><small>{references.length} / {maxReferences}</small></div><div className="atelier-reference-shelf">{references.map((reference, index) => <div className="atelier-reference" key={reference.id}><img src={previewUrls[index]} alt="待提交参考图" /><button type="button" onClick={() => setReferences((current) => current.filter((item) => item.id !== reference.id))} aria-label="移除参考图"><X size={13} /></button></div>)}{references.length < maxReferences && <label className="atelier-upload-tile"><Upload size={17} /><span>上传</span><input type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={(event) => { addFiles(event.target.files); event.currentTarget.value = ''; }} /></label>}<button type="button" className="atelier-library-tile" onClick={() => setAssetPicker(true)} disabled={references.length >= maxReferences}><Layers3 size={16} /><span>资产库</span></button></div></div>}
-            {isCoverModel && <div className="atelier-material-card wide"><div className="atelier-card-title"><Music2 size={16} /><span>旋律参考</span>{coverFeatureId && <small className="is-ready">歌词编辑</small>}</div>{referenceAudio ? <div className="atelier-audio-file"><Music2 size={16} /><div><b>{referenceAudio.name}</b><small>{coverFeatureId ? '高级歌词编辑 · 特征保留 24 小时' : '一步翻唱 · 直接保留原曲旋律与节奏'}</small></div>{!coverFeatureId && <button type="button" onClick={() => preprocessCover.mutate()} disabled={preprocessCover.isPending}>{preprocessCover.isPending ? <LoaderCircle className="spin" size={14} /> : <><Wand2 size={14} />编辑歌词（可选）</>}</button>}<button type="button" className="remove" onClick={() => { setReferenceAudio(null); setCoverFeatureId(null); }} aria-label="移除参考音频"><X size={14} /></button></div> : <label className="atelier-audio-drop"><Music2 size={18} /><span>上传参考音频，默认保留原旋律与节奏</span><small>需要修改歌词时，再进入高级歌词编辑。支持 MP3、WAV、FLAC、AAC、M4A、OGG；最大 50MB</small><input type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/mp4,audio/aac,audio/ogg" hidden onChange={(event) => { setReferenceAudio(event.target.files?.[0] || null); setCoverFeatureId(null); event.currentTarget.value = ''; }} /></label>}</div>}
+            {requiresReferenceAudio && <div className="atelier-material-card wide"><div className="atelier-card-title"><Music2 size={16} /><span>{isMusic01Model ? '片段参考' : '旋律参考'}</span>{isCoverModel && coverFeatureId && <small className="is-ready">歌词编辑</small>}</div>{referenceAudio ? <div className="atelier-audio-file"><Music2 size={16} /><div><b>{referenceAudio.name}</b><small>{isMusic01Model ? '将分离人声与伴奏，只根据下方歌词重演（约 60 秒内）' : coverFeatureId ? '高级歌词编辑 · 特征保留 24 小时' : '一步翻唱 · 直接保留原曲旋律与节奏'}</small></div>{isCoverModel && !coverFeatureId && <button type="button" onClick={() => preprocessCover.mutate()} disabled={preprocessCover.isPending}>{preprocessCover.isPending ? <LoaderCircle className="spin" size={14} /> : <><Wand2 size={14} />编辑歌词（可选）</>}</button>}<button type="button" className="remove" onClick={() => { setReferenceAudio(null); setCoverFeatureId(null); }} aria-label="移除参考音频"><X size={14} /></button></div> : <label className="atelier-audio-drop"><Music2 size={18} /><span>{isMusic01Model ? '上传 10–60 秒、同时含人声和伴奏的片段' : '上传参考音频，默认保留原旋律与节奏'}</span><small>{isMusic01Model ? '不填写风格提示；它会按片段的人声、伴奏和下方歌词生成。' : '需要修改歌词时，再进入高级歌词编辑。'} 支持 MP3、WAV、FLAC、AAC、M4A、OGG；最大 50MB</small><input type="file" accept="audio/mpeg,audio/wav,audio/x-wav,audio/flac,audio/mp4,audio/aac,audio/ogg" hidden onChange={(event) => { setReferenceAudio(event.target.files?.[0] || null); setCoverFeatureId(null); event.currentTarget.value = ''; }} /></label>}</div>}
             {Object.entries(selectedModel?.params || {}).filter(([, config]) => config.type !== 'textarea').map(([key, config]) => config.type === 'boolean' ? <label className="atelier-toggle" key={key}><input type="checkbox" checked={Boolean(params[key])} onChange={(event) => setParams((current) => ({ ...current, [key]: event.target.checked }))} /><span>{config.label}</span><i /></label> : <label className="atelier-control" key={key}><span>{config.label}</span><select value={String(params[key] ?? '')} onChange={(event) => setParams((current) => ({ ...current, [key]: event.target.value }))}>{config.options?.map((option) => <option key={option} value={option}>{option}</option>)}</select><ChevronDown size={14} /></label>)}
           </div>
-          {Object.entries(selectedModel?.params || {}).filter(([, config]) => config.type === 'textarea').map(([key, config]) => <label className="atelier-lyrics" key={key}><span>{config.label}</span><textarea rows={5} value={String(params[key] || '')} onChange={(event) => setParams((current) => ({ ...current, [key]: event.target.value }))} placeholder={isCoverModel ? '留空时会尝试从参考音频识别歌词；也可以在这里精修字词。' : '可填写歌词，或使用上方的自动写词选项。'} /></label>)}
+          {Object.entries(selectedModel?.params || {}).filter(([, config]) => config.type === 'textarea').map(([key, config]) => <label className="atelier-lyrics" key={key}><span>{config.label}</span><textarea rows={5} value={String(params[key] || '')} maxLength={isMusic01Model ? 196 : undefined} onChange={(event) => setParams((current) => ({ ...current, [key]: event.target.value }))} placeholder={isMusic01Model ? '粘贴这段片段对应的原歌词；不需要风格提示。' : isCoverModel ? '留空时会尝试从参考音频识别歌词；也可以在这里精修字词。' : '可填写歌词，或使用上方的自动写词选项。'} /></label>)}
         </section>
 
-        <div className="atelier-submit-row"><div><span>{isCoverModel ? (referenceAudio ? '旋律参考已就绪' : '请添加旋律参考') : selectedModel ? shortModel(selectedModel.id) : '正在读取模型'}</span></div><button className="atelier-generate" onClick={() => prompt.trim() && generate.mutate()} disabled={generate.isPending || !prompt.trim() || (isCoverModel && !referenceAudio)}>{generate.isPending ? <LoaderCircle className="spin" size={18} /> : <><span>{modality === 'music' ? '生成这一段声音' : modality === 'video' ? '生成动态片段' : '生成视觉作品'}</span><ArrowUpRight size={18} /></>}</button></div>
+        <div className="atelier-submit-row"><div><span>{isMusic01Model ? (referenceAudio ? '片段与歌词已就绪' : '请添加参考片段') : isCoverModel ? (referenceAudio ? '旋律参考已就绪' : '请添加旋律参考') : selectedModel ? shortModel(selectedModel.id) : '正在读取模型'}</span></div><button className="atelier-generate" onClick={() => canGenerate && generate.mutate()} disabled={generate.isPending || !canGenerate}>{generate.isPending ? <LoaderCircle className="spin" size={18} /> : <><span>{modality === 'music' ? '生成这一段声音' : modality === 'video' ? '生成动态片段' : '生成视觉作品'}</span><ArrowUpRight size={18} /></>}</button></div>
         {(generate.error || notice) && <p className={`atelier-notice${generate.error ? ' error' : ''}`}>{generate.error?.message || notice}</p>}
       </main>
 
